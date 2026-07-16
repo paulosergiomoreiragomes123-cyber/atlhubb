@@ -23,6 +23,7 @@
     "@napi-rs/canvas": "^0.1.100",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@react-pdf/renderer": "^4.5.1",
     "@vercel/blob": "^2.6.1",
     "@vercel/config": "^0.5.5",
     "ai": "^7.0.26",

@@ -330,17 +330,35 @@ enum MagazineIssueStatus {
   PUBLICADA
 }
 
-// Sem model MagazinePage de propósito: o leitor usa o visualizador nativo de
-// PDF do navegador (navegação por página, zoom e busca já vêm de graça) em vez
-// de converter cada página em imagem — evita todo um pipeline de conversão
-// PDF→imagem só pra reimplementar o que o navegador já faz. Ver PROJECT.md seção 5.
+// Fase 7 — gerador automático (2026-07-16): a edição não é mais um PDF
+// colado/upado, é montada a partir do catálogo sincronizado (Fase 6A).
+// `filterType` guarda qual recorte de produtos foi usado; `productSnapshot`
+// congela os produtos NO MOMENTO da geração (mesma filosofia de
+// Conversation.messages — um JSON ponto-no-tempo, não uma tabela relacional
+// nova) — preview e publicação ficam estáveis mesmo que o catálogo mude
+// depois, e a leitura não precisa rejuntar Product toda vez.
+enum MagazineFilterType {
+  TODOS
+  LANCAMENTOS
+  PROMOCOES
+  PERFUMES
+  SUPLEMENTOS
+}
+
+// Sem model MagazinePage de propósito: a revista é renderizada como página
+// HTML responsiva (componente MagazineView, ver PROJECT.md) — o PDF agora é
+// só um export opcional sob demanda (`pdfUrl` fica null até alguém clicar
+// "Exportar PDF"), não mais a fonte de verdade da leitura.
 model MagazineIssue {
   id            String              @id @default(cuid())
   title         String
-  pdfUrl        String
+  pdfUrl        String?
   coverImageUrl String?
   status        MagazineIssueStatus @default(RASCUNHO)
   publishedAt   DateTime?
+
+  filterType      MagazineFilterType @default(TODOS)
+  productSnapshot Json?
 
   qrCodes QrCode[]
 

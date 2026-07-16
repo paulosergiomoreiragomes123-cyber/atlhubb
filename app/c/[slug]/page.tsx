@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { getQrCodeBySlug, incrementScanCount } from "@/src/modules/qrcode/queries";
 import { listActiveProducts } from "@/src/modules/products/queries";
 import { formatCents } from "@/src/lib/currency";
+import { MagazineView, type MagazineIssueForView } from "@/src/components/magazine/magazine-view";
 
 export const metadata: Metadata = { title: "AtlHub" };
 
@@ -92,11 +93,10 @@ function ProdutoPublico({
   );
 }
 
-function RevistaPublica({ issue }: { issue: { title: string; pdfUrl: string } }) {
+function RevistaPublica({ issue }: { issue: MagazineIssueForView }) {
   return (
-    <div className="mx-auto flex h-[calc(100vh-10rem)] max-w-4xl flex-col gap-3">
-      <h1 className="text-xl font-semibold">{issue.title}</h1>
-      <iframe src={issue.pdfUrl} title={issue.title} className="w-full flex-1 rounded-lg border" />
+    <div className="mx-auto max-w-4xl pb-10">
+      <MagazineView issue={issue} />
     </div>
   );
 }

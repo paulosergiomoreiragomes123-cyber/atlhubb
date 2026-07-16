@@ -30,7 +30,15 @@ export function getQrCodeBySlug(slug: string) {
         },
       },
       magazineIssue: {
-        select: { title: true, pdfUrl: true, status: true },
+        select: {
+          title: true,
+          pdfUrl: true,
+          status: true,
+          filterType: true,
+          productSnapshot: true,
+          publishedAt: true,
+          createdAt: true,
+        },
       },
     },
   });

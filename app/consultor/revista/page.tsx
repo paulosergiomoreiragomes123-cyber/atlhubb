@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { requireApprovedUser } from "@/src/modules/auth/dal";
 import { listPublishedMagazineIssues } from "@/src/modules/magazine/queries";
+import { MagazineCoverPreview } from "@/src/components/magazine/magazine-cover-preview";
 
 export const metadata: Metadata = { title: "Revista digital — AtlHub" };
 
@@ -25,25 +25,12 @@ export default async function RevistaConsultorPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {issues.map((issue) => (
             <Link key={issue.id} href={`/consultor/revista/${issue.id}`}>
-              <Card className="h-full overflow-hidden transition-colors hover:bg-muted/50">
-                <div className="relative aspect-[3/4] bg-muted">
-                  {issue.coverImageUrl ? (
-                    <Image
-                      src={issue.coverImageUrl}
-                      alt={issue.title}
-                      fill
-                      className="object-cover"
-                      unoptimized
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      Sem capa
-                    </div>
-                  )}
+              <Card className="h-full overflow-hidden py-0 transition-colors hover:opacity-90">
+                <div className="relative aspect-[3/4]">
+                  <div className="absolute inset-0">
+                    <MagazineCoverPreview title={issue.title} date={issue.publishedAt ?? issue.createdAt} />
+                  </div>
                 </div>
-                <CardHeader>
-                  <CardTitle className="text-sm">{issue.title}</CardTitle>
-                </CardHeader>
               </Card>
             </Link>
           ))}

@@ -610,9 +610,13 @@ Acontece dentro das Server Actions de produto que já existiam (`createProductAc
 
 ### 12.1 Revista digital: sem `MagazinePage`, leitor via PDF nativo
 
+> **Superado pela Fase 7 (2026-07-16, ver seção 18)**: a revista não depende mais de upload manual de PDF — é gerada automaticamente a partir do catálogo sincronizado, renderizada como página HTML responsiva. O texto abaixo descreve o desenho original (Fase 5); fica como referência histórica porque o `MagazineIssue` (e o próprio `<iframe>` de PDF) continuam existindo pra quem quiser exportar/baixar um PDF depois de gerada.
+
 O rascunho original (seção 6.4 do documento inicial) previa uma tabela `magazine_pages` com uma imagem por página, pensada pra um leitor "flip-book" customizado. Isso foi trocado por uma única coluna `pdfUrl` em `MagazineIssue`, lida pelo **visualizador nativo de PDF do navegador** (`<iframe src={pdfUrl} />`). Motivo: o navegador já entrega navegação por página, zoom e busca de graça — converter cada página de um PDF em imagem exigiria um pipeline de conversão (biblioteca de renderização, processamento por página) só pra reimplementar o que já existe. Publicação continua controlada (`RASCUNHO` → `PUBLICADA`), então nada de rascunho aparece pro consultor antes da hora.
 
 ### 12.2 Upload: direto do navegador pro Blob (não passa pelo servidor)
+
+> **Superado pela Fase 7**: não existe mais upload manual de PDF/capa no fluxo de criação — ver seção 18. `/api/blob/upload` continua existindo e ativo (agora usado pelo export de PDF gerado, seção 18.4).
 
 PDFs de revista passam fácil dos **4.5MB** — o limite de corpo de requisição pra upload via servidor na Vercel. Por isso o upload usa o fluxo de **client upload** do `@vercel/blob`: o admin escolhe o arquivo, o navegador pede um token pro backend (`/api/blob/upload`, que confere que quem está pedindo é um admin aprovado antes de emitir), e o arquivo vai direto do navegador pro Blob Store — nunca passa pelo corpo de uma Server Action. Suporta até 5TB por arquivo dessa forma (na prática, o limite real aplicado é 50MB pro PDF e 5MB pra capa, configurado em `src/lib/blob.ts`).
 
@@ -694,6 +698,24 @@ Ordem definida para o desenvolvimento incremental: MVP funcional primeiro, recur
 - [x] Comandos administrativos em `/admin/loja`: sincronizar agora, regerar embeddings, status de indexação (Guia + loja)
 - [x] Cron via `vercel.ts` (diário — plano Hobby da Vercel não permite mais que 1x/dia, ver seção 16.8) + `npm run store:sync` (manual/local)
 - [ ] **Estoque não sincronizado de propósito** — a loja pública não expõe quantidade/disponibilidade de forma confiável; decisão explícita documentada na seção 16, não uma lacuna
+
+### Fase 7 — Revista digital gerada automaticamente ✅ implementada (2026-07-16)
+- [x] Substitui o upload manual de PDF/capa por um gerador automático a partir
+      do catálogo sincronizado (Fase 6A) — botão "Gerar Revista" com 5 filtros
+      (Todos/Lançamentos/Promoções/Perfumes/Suplementos)
+- [x] `MagazineIssue.productSnapshot` (JSON ponto-no-tempo) + `filterType`;
+      `pdfUrl` agora opcional (só existe após exportar)
+- [x] `MagazineView` — componente único reaproveitado no preview do admin,
+      no leitor do consultor e na página pública `/c/[slug]`
+- [x] Capa automática (gradiente + wordmark + mês/ano atual), paleta dedicada
+      escopada (`.magazine-theme`, não afeta o resto do sistema)
+- [x] Exportação em PDF sob demanda via `@react-pdf/renderer` (JS puro, sem
+      binário nativo), upload pro Blob existente
+- [x] Testado ao vivo local: filtro Perfumes (96 produtos reais), filtro
+      Promoções (0 produtos, estado vazio tratado), PDF de 19MB gerado e
+      baixado com sucesso, página pública `/c/[slug]` sem login
+- Nenhuma tela removida — `/admin/revista`, `/admin/revista/[id]`,
+  `/consultor/revista`, `/consultor/revista/[id]` continuam existindo
 
 ### Depois da Fase 5 — Maturidade e crescimento (sem data)
 - Treinamentos e comunicados/promoções (podem ser intercalados antes se o negócio priorizar)
@@ -856,3 +878,86 @@ números do Supabase local, é o mesmo banco), `/consultor/catalogo` (0 selos
 protegido), `POST /api/ia` sem `AI_GATEWAY_API_KEY`/cartão (degradação
 graciosa, HTTP 200 com mensagem amigável, sem crash) — todos testados direto
 contra a URL de produção, não só localhost.
+
+---
+
+## 18. Fase 7 — Revista Digital gerada automaticamente (implementada 2026-07-16)
+
+### 18.1 Por que substituir o upload manual
+
+O cliente não queria mais depender de montar um PDF fora do sistema — pediu
+um gerador que monta a revista sozinho a partir dos 298 produtos já
+sincronizados da loja pública (Fase 6A), com filtros, capa automática,
+preview antes de publicar e exportação opcional em PDF. Nenhuma tela foi
+removida: `/admin/revista`, `/admin/revista/[id]`, `/consultor/revista` e
+`/consultor/revista/[id]` continuam existindo — só o fluxo de *criação*
+(upload manual → gerador) e a forma de *ler* (iframe de PDF → HTML
+responsivo) mudaram.
+
+### 18.2 Snapshot ponto-no-tempo, não relação ao vivo
+
+`MagazineIssue` ganhou `filterType` (enum `MagazineFilterType`) e
+`productSnapshot` (JSON) — mesma filosofia de `Conversation.messages`: um
+array de produtos **congelado no momento da geração**, não uma consulta ao
+vivo. Isso significa que preview e publicação nunca mudam de conteúdo
+mesmo que o catálogo seja atualizado depois (ex.: um novo sync da loja), e a
+leitura (`MagazineView`) nunca precisa rejuntar `Product` — só lê o JSON já
+pronto. `pdfUrl` virou opcional: só existe depois que alguém clica
+"Exportar PDF" (a leitura normal é sempre a página HTML).
+
+### 18.3 Definição dos filtros (decisão de negócio, não técnica)
+
+Nenhum dos 5 filtros tinha campo próprio no banco — definidos com o cliente:
+- **Todos**: `active: true`, sem outro filtro.
+- **Lançamentos**: `createdAt` nos últimos 30 dias (produtos sincronizados
+  recentemente).
+- **Promoções**: categoria de slug `promocao` (existe na loja, mas sem
+  produto nenhum sincronizado até 2026-07-16 — filtro mostra estado vazio
+  corretamente, não é bug).
+- **Perfumes**: categoria com "perfume" no nome (`PERFUME BORTOLETTO`, 96
+  produtos).
+- **Suplementos**: categoria `nutraceuticos` (a mais próxima que existe hoje).
+
+`description`/`attributes` são `null` em 297 dos 298 produtos — a loja
+raramente expõe isso, e o crawler (Fase 6A) capturou fielmente o que existe.
+`MagazineView`/`pdf-template.tsx` só renderizam a seção de descrição quando
+não é null — nunca inventam texto pra preencher o vazio (mesma regra de
+"nunca invente" de toda a Fase 4/6A).
+
+### 18.4 `MagazineView` — um componente, três lugares
+
+`src/components/magazine/magazine-view.tsx` é renderizado sem alteração em:
+`/admin/revista/[id]` (preview antes de publicar), `/consultor/revista/[id]`
+(leitor) e `/c/[slug]` (destino `REVISTA` do QR Code, público sem login) —
+ninguém vê uma versão diferente da outra. `getQrCodeBySlug`
+(`src/modules/qrcode/queries.ts`) teve o `select` do `magazineIssue`
+estendido pra incluir `filterType`/`productSnapshot` (mesmo cuidado de
+performance já documentado ali, agora só trazendo o que a página usa de
+verdade). `MagazineCoverPreview` (variante compacta, sem produtos) substitui
+o antigo placeholder "Sem capa" no card de listagem do consultor.
+
+### 18.5 Paleta dedicada — `.magazine-theme`
+
+Bloco novo em `app/globals.css`, escopado numa classe (não toca `:root`/
+`.dark`) — tons verde/dourado quentes (identidade "natural"), tipografia
+serifada só nos títulos da revista. Um catálogo impresso tem identidade
+visual própria e fixa por design, então `.magazine-theme` não reage ao dark
+mode do resto do app de propósito.
+
+### 18.6 Exportação em PDF sob demanda
+
+`@react-pdf/renderer` (JS puro, sem binário nativo — mesmo padrão de
+`tesseract.js`/`unpdf` já usados no projeto) via `src/modules/magazine/
+pdf-template.tsx`: capa + páginas de produto em grade (`flexWrap`, já que
+react-pdf não tem CSS grid), buscando as imagens direto da URL remota (S3).
+`exportMagazinePdfAction` roda `renderToBuffer`, sobe pro Blob Store já
+existente (`@vercel/blob`, mesmo usado no upload da Fase 5) e salva a URL em
+`pdfUrl`. Testado ao vivo: PDF de 19,3MB com 96 produtos reais, upload e
+download confirmados.
+
+### 18.7 O que não mudou
+
+`src/modules/qrcode/actions.ts` (já suportava `REVISTA` como destino),
+`recordAuditLog`, os guards `requireAdmin`/`requireApprovedUser`, a rota
+`/api/blob/upload` (reaproveitada, não recriada) — nada em produtos/
+catálogo/IA/loja foi tocado.

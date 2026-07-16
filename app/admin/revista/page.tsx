@@ -20,7 +20,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/src/modules/auth/dal";
 import { listMagazineIssues } from "@/src/modules/magazine/queries";
-import { MagazineForm } from "@/src/components/admin/magazine-form";
+import { GenerateMagazineForm } from "@/src/components/admin/generate-magazine-form";
+import { MAGAZINE_FILTER_LABELS } from "@/src/modules/magazine/schemas";
 
 export const metadata: Metadata = { title: "Revista digital — AtlHub" };
 
@@ -33,19 +34,21 @@ export default async function RevistaPage() {
       <div>
         <h1 className="text-2xl font-semibold">Revista digital</h1>
         <p className="text-muted-foreground">
-          Edições ficam como rascunho até serem publicadas para os consultores.
+          Gerada automaticamente a partir do catálogo sincronizado — fica como
+          rascunho até ser publicada para os consultores.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Nova edição</CardTitle>
+          <CardTitle className="text-base">Gerar Revista</CardTitle>
           <CardDescription>
-            Faça upload do PDF (ou cole uma URL) — publique quando estiver pronta.
+            Escolha o recorte de produtos — a capa e as páginas são montadas
+            sozinhas. Você revisa o preview antes de publicar.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <MagazineForm />
+          <GenerateMagazineForm />
         </CardContent>
       </Card>
 
@@ -53,6 +56,8 @@ export default async function RevistaPage() {
         <TableHeader>
           <TableRow>
             <TableHead>Título</TableHead>
+            <TableHead>Filtro</TableHead>
+            <TableHead>Produtos</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Publicada em</TableHead>
             <TableHead className="text-right">Ações</TableHead>
@@ -62,6 +67,12 @@ export default async function RevistaPage() {
           {issues.map((issue) => (
             <TableRow key={issue.id}>
               <TableCell className="font-medium">{issue.title}</TableCell>
+              <TableCell className="text-muted-foreground">
+                {MAGAZINE_FILTER_LABELS[issue.filterType]}
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {Array.isArray(issue.productSnapshot) ? issue.productSnapshot.length : 0}
+              </TableCell>
               <TableCell>
                 <Badge variant={issue.status === "PUBLICADA" ? "default" : "secondary"}>
                   {issue.status === "PUBLICADA" ? "Publicada" : "Rascunho"}
@@ -81,7 +92,7 @@ export default async function RevistaPage() {
           ))}
           {issues.length === 0 && (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 Nenhuma edição ainda.
               </TableCell>
             </TableRow>

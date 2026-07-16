@@ -1,11 +1,31 @@
 import { z } from "zod";
 
-export const magazineIssueSchema = z.object({
-  title: z.string().trim().min(2, "Informe o título da edição."),
-  // Aceita tanto uma URL de upload (Blob) quanto uma URL colada manualmente —
-  // o formulário decide qual usar, o schema só valida que é uma URL de verdade.
-  pdfUrl: z.string().trim().url("Informe uma URL de PDF válida, ou faça upload."),
-  coverImageUrl: z.string().trim().url("URL de imagem inválida.").optional().or(z.literal("")),
-});
+// Rótulos em pt-BR pro Select do admin e pra exibição — uma única fonte,
+// reaproveitada pelo form e por qualquer lugar que precise mostrar o filtro
+// de forma legível (ex.: card da edição).
+export const MAGAZINE_FILTER_LABELS = {
+  TODOS: "Todos os produtos",
+  LANCAMENTOS: "Apenas lançamentos",
+  PROMOCOES: "Apenas promoções",
+  PERFUMES: "Apenas perfumes",
+  SUPLEMENTOS: "Apenas suplementos",
+} as const;
 
-export type MagazineIssueInput = z.infer<typeof magazineIssueSchema>;
+export const MAGAZINE_FILTER_VALUES = [
+  "TODOS",
+  "LANCAMENTOS",
+  "PROMOCOES",
+  "PERFUMES",
+  "SUPLEMENTOS",
+] as const;
+
+export const generateMagazineSchema = z.object({
+  title: z.string().trim().min(2, "Informe o título da edição."),
+  filterType: z.enum(MAGAZINE_FILTER_VALUES),
+});
+export type GenerateMagazineInput = z.infer<typeof generateMagazineSchema>;
+
+export const renameMagazineSchema = z.object({
+  title: z.string().trim().min(2, "Informe o título da edição."),
+});
+export type RenameMagazineInput = z.infer<typeof renameMagazineSchema>;

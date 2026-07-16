@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Download } from "lucide-react";
 
 import { requireApprovedUser } from "@/src/modules/auth/dal";
 import { getPublishedMagazineIssue } from "@/src/modules/magazine/queries";
 import { ShareButton } from "@/src/components/consultor/share-button";
+import { MagazineView } from "@/src/components/magazine/magazine-view";
 
 export const metadata: Metadata = { title: "Revista digital — AtlHub" };
 
@@ -21,23 +22,32 @@ export default async function LeitorRevistaPage({
   if (!issue) notFound();
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-4xl flex-col gap-3">
+    <div className="mx-auto flex max-w-4xl flex-col gap-4 pb-10">
       <div className="flex items-center justify-between">
         <Link
           href="/consultor/revista"
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className="size-4" />
-          {issue.title}
+          Voltar
         </Link>
-        <ShareButton targetType="REVISTA" magazineIssueId={issue.id} />
+        <div className="flex items-center gap-2">
+          {issue.pdfUrl && (
+            <a
+              href={issue.pdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Download className="size-4" />
+              Baixar PDF
+            </a>
+          )}
+          <ShareButton targetType="REVISTA" magazineIssueId={issue.id} />
+        </div>
       </div>
 
-      <iframe
-        src={issue.pdfUrl}
-        title={issue.title}
-        className="w-full flex-1 rounded-lg border"
-      />
+      <MagazineView issue={issue} />
     </div>
   );
 }
