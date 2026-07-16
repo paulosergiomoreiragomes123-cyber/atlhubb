@@ -686,7 +686,7 @@ Ordem definida para o desenvolvimento incremental: MVP funcional primeiro, recur
 - [x] `searchProducts`/`getProductDetails`/`compareProducts` (IA) passam a incluir `storeUrl`/`imageUrl`; agente instruído a combinar Guia Oficial + produto sincronizado na resposta
 - [x] Cartão de produto (imagem + preço + botão "Comprar") no chat do consultor (`ChatWindow`)
 - [x] Comandos administrativos em `/admin/loja`: sincronizar agora, regerar embeddings, status de indexação (Guia + loja)
-- [x] Cron via `vercel.ts` (a cada 6h) + `npm run store:sync` (manual/local)
+- [x] Cron via `vercel.ts` (diário — plano Hobby da Vercel não permite mais que 1x/dia, ver seção 16.8) + `npm run store:sync` (manual/local)
 - [ ] **Estoque não sincronizado de propósito** — a loja pública não expõe quantidade/disponibilidade de forma confiável; decisão explícita documentada na seção 16, não uma lacuna
 
 ### Depois da Fase 5 — Maturidade e crescimento (sem data)
@@ -785,7 +785,7 @@ Sem tool nova: `searchProducts`, `getProductDetails` e `compareProducts` (`src/m
 
 ### 16.8 Sincronização agendada
 
-`vercel.ts` (novo, convenção atual da Vercel — ver `@vercel/config`) declara um cron a cada 6h chamando `/api/cron/sync-loja`, protegida por `CRON_SECRET` (a Vercel envia `Authorization: Bearer` automaticamente quando essa env var está configurada no projeto).
+`vercel.ts` (novo, convenção atual da Vercel — ver `@vercel/config`) declara um cron **diário** (`0 3 * * *`, 03h UTC) chamando `/api/cron/sync-loja`, protegida por `CRON_SECRET` (a Vercel envia `Authorization: Bearer` automaticamente quando essa env var está configurada no projeto). Frequência diária por limite do plano Hobby da Vercel (confirmado ao vivo no primeiro deploy: "Hobby accounts are limited to daily cron jobs") — se o projeto migrar pro plano Pro, dá pra aumentar a frequência (ex.: a cada 6h) só editando o `schedule`.
 
 ### 16.9 Como operar
 
@@ -793,3 +793,60 @@ Sem tool nova: `searchProducts`, `getProductDetails` e `compareProducts` (`src/m
 - **Credenciais**: `.env` local apenas (gitignorado), nunca logadas — `client.ts` só loga sucesso/falha do login, nunca o payload.
 - **Testado ao vivo (2026-07-15)**: 1ª execução — 21 categorias, 298 produtos, 298 criados, 0 erros; 2ª execução (idempotência) — 298 produtos, 0 criados, 0 atualizados, 298 sem mudança. `npm run lint` e `npm run build` limpos.
 - **Pendência conhecida**: mesma da Fase 4 — sem `AI_GATEWAY_API_KEY` real, os embeddings dos 298 produtos sincronizados ficam pendentes (busca cai pro fallback de texto); rodar `npm run ai:reembed` ou o botão "Regerar embeddings" depois de configurar a chave.
+
+---
+
+## 17. Deploy em produção (Vercel) — feito e verificado ao vivo (2026-07-15)
+
+### 17.1 O que foi configurado
+
+Projeto `atlhubb` criado na Vercel e linkado ao repositório GitHub
+(`paulosergiomoreiragomes123-cyber/atlhubb`), domínio de produção
+`https://atlhubb.vercel.app`. Env vars de produção configuradas: `DATABASE_URL`,
+`AUTH_SECRET`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET`, `LOJA_ATLANTICA_USERNAME`/
+`PASSWORD`, `BLOB_READ_WRITE_TOKEN` (Blob Store `atlhub-media`, acesso público —
+necessário porque `/c/[slug]` exibe a revista publicamente sem login, ver seção
+12.4). `AI_GATEWAY_API_KEY` não foi configurada como env var — ver 17.3.
+
+### 17.2 Duas descobertas só visíveis rodando de verdade na Vercel
+
+Nenhuma delas apareceu em teste local — só na primeira tentativa real de deploy:
+
+1. **Cron do plano Hobby**: a Vercel rejeitou o deploy com o `vercel.ts`
+   original (`schedule: "0 */6 * * *"`, a cada 6h) — "Hobby accounts are
+   limited to daily cron jobs". Ajustado pra `"0 3 * * *"` (uma vez por dia,
+   03h UTC). Se o projeto for pra plano Pro no futuro, só editar o `schedule`
+   pra aumentar a frequência.
+2. **Conexão direta com o Supabase não funciona em função serverless**: login
+   e qualquer query no admin falhavam com `Can't reach database server` — a
+   conexão direta (porta 5432) do Supabase exige IPv6 (sem o add-on pago de
+   IPv4), e as funções serverless da Vercel só têm saída IPv4. Funciona
+   perfeitamente local (a máquina de dev tem rota direta), mas nunca
+   funcionaria implantado. Fix: `DATABASE_URL` de produção na Vercel usa a
+   conexão com **connection pooling** do Supabase (Supavisor, porta 6543,
+   `?pgbouncer=true`) — o `.env` local continua com a conexão direta (mais
+   simples, sem motivo pra mudar em dev). Ver `.env.example` pro formato exato
+   de cada uma.
+
+### 17.3 `AI_GATEWAY_API_KEY` — provavelmente não precisa criar uma
+
+Ao rodar `vercel link`, a Vercel já baixa um `VERCEL_OIDC_TOKEN` — testado ao
+vivo (`embed()` de verdade, sem nenhuma `AI_GATEWAY_API_KEY` configurada): a
+autenticação via OIDC funcionou (o erro de "sem autenticação" desapareceu). O
+único obstáculo que restou foi de billing: **"AI Gateway requires a valid
+credit card on file"**. Ou seja, rodando na Vercel, a IA deve autenticar
+sozinha via OIDC assim que houver um cartão cadastrado em
+`vercel.com/{team}/~/ai` — não é obrigatório criar uma `AI_GATEWAY_API_KEY`
+manual. Uma chave manual continua útil só pros scripts locais
+(`guide:ingest`/`ai:reembed`/`store:sync`), que rodam fora do runtime da
+Vercel e não têm OIDC automático.
+
+### 17.4 Verificado ao vivo em produção, pós-fix
+
+Login admin (sessão criada, cookie `__Secure-authjs.session-token`),
+`/admin/loja` (298 produtos, 14 categorias, 212 chunks do Guia — mesmos
+números do Supabase local, é o mesmo banco), `/consultor/catalogo` (0 selos
+"Esgotado" falsos), `/api/cron/sync-loja` sem o secret correto (401,
+protegido), `POST /api/ia` sem `AI_GATEWAY_API_KEY`/cartão (degradação
+graciosa, HTTP 200 com mensagem amigável, sem crash) — todos testados direto
+contra a URL de produção, não só localhost.
