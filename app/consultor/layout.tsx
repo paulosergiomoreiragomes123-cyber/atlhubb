@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { label: "Catálogo", href: "/consultor/catalogo" },
   { label: "Revista", href: "/consultor/revista" },
   { label: "Assistente IA", href: "/consultor/assistente-ia" },
+  { label: "Meu Perfil", href: "/consultor/perfil" },
 ];
 
 export default async function ConsultorLayout({

@@ -1,41 +1,59 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Download } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
 import { requireApprovedUser } from "@/src/modules/auth/dal";
 import { listPublishedMagazineIssues } from "@/src/modules/magazine/queries";
-import { MagazineCoverPreview } from "@/src/components/magazine/magazine-cover-preview";
+import { getMyProfile } from "@/src/modules/profile/queries";
+import { ShareButton } from "@/src/components/consultor/share-button";
+import { MagazineView, type ConsultantInfo } from "@/src/components/magazine/magazine-view";
 
 export const metadata: Metadata = { title: "Revista digital — AtlHub" };
 
 export default async function RevistaConsultorPage() {
-  await requireApprovedUser();
-  const issues = await listPublishedMagazineIssues();
+  const user = await requireApprovedUser();
+
+  const [issues, profile] = await Promise.all([listPublishedMagazineIssues(), getMyProfile(user.id)]);
+  const issue = issues[0] ?? null;
+
+  if (!issue) {
+    return (
+      <div className="mx-auto flex max-w-4xl flex-col gap-6">
+        <div>
+          <h1 className="text-2xl font-semibold">Revista digital</h1>
+          <p className="text-muted-foreground">Nenhuma edição publicada ainda.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const consultant: ConsultantInfo = {
+    name: user.name,
+    phone: profile?.phone ?? null,
+    whatsapp: profile?.whatsapp ?? null,
+    city: profile?.city ?? null,
+    instagram: profile?.instagram ?? null,
+    photoUrl: profile?.photoUrl ?? null,
+  };
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6">
-      <div>
+    <div className="mx-auto flex max-w-4xl flex-col gap-4 pb-10">
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Revista digital</h1>
-        <p className="text-muted-foreground">Edições publicadas da Atlântica Natural.</p>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/api/revista/${issue.id}/pdf`}
+            prefetch={false}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <Download className="size-4" />
+            Baixar PDF
+          </Link>
+          <ShareButton targetType="REVISTA" magazineIssueId={issue.id} />
+        </div>
       </div>
 
-      {issues.length === 0 ? (
-        <p className="text-muted-foreground">Nenhuma edição publicada ainda.</p>
-      ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {issues.map((issue) => (
-            <Link key={issue.id} href={`/consultor/revista/${issue.id}`}>
-              <Card className="h-full overflow-hidden py-0 transition-colors hover:opacity-90">
-                <div className="relative aspect-[3/4]">
-                  <div className="absolute inset-0">
-                    <MagazineCoverPreview title={issue.title} date={issue.publishedAt ?? issue.createdAt} />
-                  </div>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
+      <MagazineView issue={issue} consultant={consultant} />
     </div>
   );
 }

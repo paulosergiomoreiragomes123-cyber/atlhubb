@@ -5,8 +5,9 @@ import { ChevronLeft, Download } from "lucide-react";
 
 import { requireApprovedUser } from "@/src/modules/auth/dal";
 import { getPublishedMagazineIssue } from "@/src/modules/magazine/queries";
+import { getMyProfile } from "@/src/modules/profile/queries";
 import { ShareButton } from "@/src/components/consultor/share-button";
-import { MagazineView } from "@/src/components/magazine/magazine-view";
+import { MagazineView, type ConsultantInfo } from "@/src/components/magazine/magazine-view";
 
 export const metadata: Metadata = { title: "Revista digital — AtlHub" };
 
@@ -15,11 +16,20 @@ export default async function LeitorRevistaPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireApprovedUser();
+  const user = await requireApprovedUser();
   const { id } = await params;
 
-  const issue = await getPublishedMagazineIssue(id);
+  const [issue, profile] = await Promise.all([getPublishedMagazineIssue(id), getMyProfile(user.id)]);
   if (!issue) notFound();
+
+  const consultant: ConsultantInfo = {
+    name: user.name,
+    phone: profile?.phone ?? null,
+    whatsapp: profile?.whatsapp ?? null,
+    city: profile?.city ?? null,
+    instagram: profile?.instagram ?? null,
+    photoUrl: profile?.photoUrl ?? null,
+  };
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 pb-10">
@@ -32,22 +42,19 @@ export default async function LeitorRevistaPage({
           Voltar
         </Link>
         <div className="flex items-center gap-2">
-          {issue.pdfUrl && (
-            <a
-              href={issue.pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <Download className="size-4" />
-              Baixar PDF
-            </a>
-          )}
+          <Link
+            href={`/api/revista/${issue.id}/pdf`}
+            prefetch={false}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <Download className="size-4" />
+            Baixar PDF
+          </Link>
           <ShareButton targetType="REVISTA" magazineIssueId={issue.id} />
         </div>
       </div>
 
-      <MagazineView issue={issue} />
+      <MagazineView issue={issue} consultant={consultant} />
     </div>
   );
 }

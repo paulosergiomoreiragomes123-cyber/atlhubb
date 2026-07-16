@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Download } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import {
@@ -11,15 +13,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/src/modules/auth/dal";
 import { getMagazineIssue } from "@/src/modules/magazine/queries";
-import { MAGAZINE_FILTER_LABELS } from "@/src/modules/magazine/schemas";
+import { MAGAZINE_FILTER_LABELS, MAGAZINE_SORT_LABELS } from "@/src/modules/magazine/schemas";
 import {
   publishMagazineIssueAction,
   unpublishMagazineIssueAction,
   deleteMagazineIssueAction,
 } from "@/src/modules/magazine/actions";
 import { RenameMagazineForm } from "@/src/components/admin/rename-magazine-form";
-import { ExportMagazinePdfButton } from "@/src/components/admin/export-magazine-pdf-button";
-import { MagazineView } from "@/src/components/magazine/magazine-view";
+import { MagazineView, type ConsultantInfo } from "@/src/components/magazine/magazine-view";
 import { BackLink } from "@/src/components/admin/back-link";
 
 export const metadata: Metadata = { title: "Editar edição — AtlHub" };
@@ -29,11 +30,23 @@ export default async function EditarRevistaPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const { id } = await params;
 
   const issue = await getMagazineIssue(id);
   if (!issue) notFound();
+
+  // Preview usa os dados do próprio admin logado — se WhatsApp/Instagram/
+  // foto estiverem vazios (comum pra um admin, que não é consultor de
+  // verdade), os campos simplesmente somem do preview, nunca inventados.
+  const previewConsultant: ConsultantInfo = {
+    name: admin.name,
+    phone: null,
+    whatsapp: null,
+    city: null,
+    instagram: null,
+    photoUrl: null,
+  };
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
@@ -42,7 +55,8 @@ export default async function EditarRevistaPage({
         <h1 className="text-2xl font-semibold">{issue.title}</h1>
         <p className="text-muted-foreground">
           {issue.status === "PUBLICADA" ? "Publicada" : "Rascunho"} ·{" "}
-          {MAGAZINE_FILTER_LABELS[issue.filterType]}
+          {issue.filterTypes.map((f) => MAGAZINE_FILTER_LABELS[f]).join(", ")} · Ordenado por{" "}
+          {MAGAZINE_SORT_LABELS[issue.sortBy]}
         </p>
       </div>
 
@@ -57,9 +71,12 @@ export default async function EditarRevistaPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Publicação e exportação</CardTitle>
+          <CardTitle className="text-base">Publicação</CardTitle>
           <CardDescription>
             Só edições publicadas aparecem para os consultores em /consultor/revista.
+            Cada consultor baixa o PDF com o próprio contato no rodapé — não
+            existe um PDF único pra todo mundo (ver &ldquo;Baixar PDF de exemplo&rdquo;
+            abaixo, que usa os seus dados de admin só pra conferir o layout).
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
@@ -79,17 +96,25 @@ export default async function EditarRevistaPage({
               Excluir
             </Button>
           </form>
-          <ExportMagazinePdfButton id={issue.id} pdfUrl={issue.pdfUrl} />
+          <Button asChild variant="outline">
+            <Link href={`/api/revista/${issue.id}/pdf`} prefetch={false}>
+              <Download className="size-4" />
+              Baixar PDF de exemplo
+            </Link>
+          </Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Preview</CardTitle>
-          <CardDescription>Exatamente o que o consultor (e quem escanear o QR Code) vai ver.</CardDescription>
+          <CardDescription>
+            Estrutura exata do que o consultor vê — o rodapé/última página
+            aqui usam seus dados de admin, cada consultor vê os próprios.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <MagazineView issue={issue} />
+          <MagazineView issue={issue} consultant={previewConsultant} />
         </CardContent>
       </Card>
     </div>

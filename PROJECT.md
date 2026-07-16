@@ -1,6 +1,6 @@
 # AtlHub — Documento de Arquitetura
 
-> Status: Fases 1–3 implementadas, mais um bloco de plataforma administrativa completa (marcas, fornecedores, galeria de imagens, estoque com histórico, busca avançada, auditoria, dashboard, sidebar) construído antes da Fase 4 a pedido do cliente. **Fase 4 (assistente de IA + ingestão do Guia Oficial)** implementada e testada contra o Supabase real — o Guia 2026 é um PDF escaneado (sem texto extraível); um fallback de OCR (`tesseract.js` + `@napi-rs/canvas`, 2026-07-15, ver seção 9) ingeriu as 204 páginas em 212 chunks reais. Falta só a `AI_GATEWAY_API_KEY` (a ser adicionada no deploy) para o primeiro teste com modelo de verdade e para completar os embeddings pendentes (`npm run ai:reembed`, ver seção 9). **Fase 5 (revista digital, QR Code, compartilhamento)** implementada e testada contra o Supabase real — falta só o `BLOB_READ_WRITE_TOKEN` (idem, no deploy) para o upload real de PDF funcionar; o resto (CRUD, publicação, QR Code, página pública) já funciona hoje via URL manual. **Fase 6A (sincronização com a loja pública `loja.atlanticanatural.com.br`) implementada e testada ao vivo (2026-07-15)** — 298 produtos sincronizados de 21 categorias, rodado duas vezes contra o Supabase real confirmando idempotência (2ª execução: 0 criados, 0 atualizados, 298 sem mudança). Isso supera a decisão de negócio da seção 8/10 (registrada mais cedo no mesmo dia) — o cliente confirmou que a loja pública existe e deve ser sincronizada; ver seção 16.
+> Status: Fases 1–3 implementadas, mais um bloco de plataforma administrativa completa (marcas, fornecedores, galeria de imagens, estoque com histórico, busca avançada, auditoria, dashboard, sidebar) construído antes da Fase 4 a pedido do cliente. **Fase 4 (assistente de IA + ingestão do Guia Oficial)** implementada e testada contra o Supabase real — o Guia 2026 é um PDF escaneado (sem texto extraível); um fallback de OCR (`tesseract.js` + `@napi-rs/canvas`, 2026-07-15, ver seção 9) ingeriu as 204 páginas em 212 chunks reais. Falta só a `AI_GATEWAY_API_KEY` (a ser adicionada no deploy) para o primeiro teste com modelo de verdade e para completar os embeddings pendentes (`npm run ai:reembed`, ver seção 9). **Fase 5 (revista digital, QR Code, compartilhamento)** implementada e testada contra o Supabase real — falta só o `BLOB_READ_WRITE_TOKEN` (idem, no deploy) para o upload real de PDF funcionar; o resto (CRUD, publicação, QR Code, página pública) já funciona hoje via URL manual. **Fase 6A (sincronização com a loja pública `loja.atlanticanatural.com.br`) implementada e testada ao vivo (2026-07-15)** — 298 produtos sincronizados de 21 categorias, rodado duas vezes contra o Supabase real confirmando idempotência (2ª execução: 0 criados, 0 atualizados, 298 sem mudança). Isso supera a decisão de negócio da seção 8/10 (registrada mais cedo no mesmo dia) — o cliente confirmou que a loja pública existe e deve ser sincronizada; ver seção 16. **Fase 7.1 (revista digital personalizada por consultor, estilo Natura/Avon, 2026-07-16)** substituiu a Fase 7 — sem PDF salvo, cada consultor vê/baixa a revista com o próprio contato (WhatsApp/Instagram/foto de `/consultor/perfil`), sem botão "Comprar"; ver seção 19.
 > Base técnica atual do repositório: Next.js 16.2.10 (App Router, modelo de Cache Components), React 19, TypeScript, Tailwind CSS v4, Prisma ORM + Supabase Postgres, Auth.js v5, React Hook Form + Zod, shadcn/ui, AI SDK v6 (`ai` + `@ai-sdk/react`) via Vercel AI Gateway, `@vercel/blob` (upload direto do navegador), `qrcode`, `cheerio` (parsing HTML da loja pública, Fase 6A), `@vercel/config` (`vercel.ts`, cron de sincronização), `tesseract.js` + `@napi-rs/canvas` (OCR do Guia Oficial, ver seção 9).
 
 ---
@@ -961,3 +961,136 @@ download confirmados.
 `recordAuditLog`, os guards `requireAdmin`/`requireApprovedUser`, a rota
 `/api/blob/upload` (reaproveitada, não recriada) — nada em produtos/
 catálogo/IA/loja foi tocado.
+
+---
+
+## 19. Fase 7.1 — Revista Digital personalizada por consultor, estilo Natura/Avon (implementada 2026-07-16)
+
+### 19.1 De catálogo único pra ferramenta de venda pessoal
+
+O pedido foi ir além de "gerar sozinha" (seção 18): a revista vira uma
+ferramenta de venda do **consultor**, não da Atlântica em abstrato. Sem link
+"Comprar" pra loja — cada produto e a última página têm
+"💬 Peça pelo WhatsApp" apontando pro número **de quem está mostrando a
+revista**, com rodapé e última página trazendo nome/telefone/WhatsApp/
+cidade/Instagram/foto de quem está logado. Isso muda a arquitetura: a
+revista deixa de ser um documento único e passa a ser o mesmo catálogo
+**personalizado na hora** pra cada consultor que visualiza ou baixa.
+
+### 19.2 Perfil do consultor (`/consultor/perfil`)
+
+`User` ganhou `whatsapp`/`instagram`/`photoUrl` (`prisma/schema.prisma`) —
+separados de `phone` porque precisam de um formato confiável pro link
+`wa.me`/QR Code. Módulo novo `src/modules/profile/` (self-service, separado
+de `src/modules/users/` que é admin-only): o próprio consultor preenche em
+`/consultor/perfil` (RHF+Zod, upload de foto via `/api/blob/upload`
+reaproveitado — a checagem lá deixou de ser admin-only e passou a aceitar
+qualquer usuário `APROVADO`, já que agora qualquer consultor precisa de
+token de upload pra própria foto, não só o admin pra PDF/capa).
+
+### 19.3 PDF gerado na hora, por consultor — não mais um arquivo salvo
+
+`exportMagazinePdfAction`/`ExportMagazinePdfButton` (Fase 7) foram
+removidos. `MagazineIssue.pdfUrl`/`coverImageUrl` saíram do schema — nada de
+PDF é mais armazenado no Blob. Um Route Handler novo,
+`app/api/revista/[id]/pdf/route.ts`, monta o PDF **na hora** com
+`renderMaganizePdf` usando os dados de quem está autenticado no momento do
+download (auth manual, `getCurrentUser()` + 401, mesmo padrão de
+`/api/ia/route.ts`). Cada download é um PDF diferente — o admin baixando um
+"PDF de exemplo" vê os próprios dados (ou campos ocultos, se vazios); um
+consultor que preencheu o perfil vê os dele.
+
+### 19.4 Filtros viraram checkboxes (união), mais ordenação
+
+`filterType` (singular) virou `filterTypes MagazineFilterType[]` — o admin
+marca vários no `GenerateMagazineForm` (shadcn `Checkbox`), combinados em
+`OR` (`conditionForFilter` por item); marcar "Todos" ignora o resto.
+Filtro novo: **Cosméticos** (categoria `cosmetico-ozonizado`, 60 produtos).
+Ordenação nova (`MagazineSortBy`): Lançamentos, Nome, Preço têm critério
+real; **Mais vendidos cai pro mesmo critério de Nome** — não existe dado de
+venda em lugar nenhum do sistema (a Atlântica não processa pedido dentro do
+AtlHub), e a UI deixa isso explícito no rótulo em vez de fingir uma
+popularidade. Capa: usa a imagem do primeiro produto do snapshot já
+ordenado como "produto em destaque" (não existe banner sincronizado pra
+escolher manualmente).
+
+### 19.5 Benefícios/Modo de uso — busca textual no Guia, com dois filtros de segurança
+
+`src/modules/magazine/guide-excerpt.ts` (determinístico, sem IA/embedding —
+decisão do cliente): procura o nome do produto literalmente no
+`GuideChunk.content` (só documentos `PRONTO` mais recentes, mesmo filtro de
+`searchGuideChunks`). Testado ao vivo contra os 298 produtos reais e dois
+problemas de falso-positivo apareceram e foram corrigidos:
+- **Chunk de índice/sumário**: uma página do Guia lista dezenas de produtos
+  em sequência (ex.: "26 - NATUOZ SABONETE 27 - MÁSCARA FACIAL ...") — um
+  nome de produto aparecendo ali como substring fazia produtos sem relação
+  nenhuma compartilharem o mesmo trecho (confirmado: 26 produtos diferentes
+  todos com o mesmo excerto de 3190 caracteres). `looksLikeIndexList` conta
+  ocorrências do padrão "número - PALAVRA" no trecho e descarta candidatos
+  assim, buscando o próximo (`findMany` + `take: 5`, não mais `findFirst`).
+- **Nome de uma palavra só**: nomes curtos e genéricos (`FERRO`, `ZINCO`,
+  `BCAA`, `CHIP`) batiam como palavra comum dentro da descrição de OUTRO
+  produto (ex.: busca por "ZINCO" retornava a descrição do `ZMA`, que só
+  *menciona* zinco como ingrediente; busca por "FERRO" retornava a
+  descrição do Pré-Treino, que só cita "absorção de ferro" de passagem).
+  Sem forma barata de confirmar que o trecho é realmente sobre aquele
+  produto, `findGuideExcerptForProduct` agora **oculta** (retorna
+  `null`/`null`) pra qualquer nome sem espaço — mesmo princípio de "nunca
+  inventar" aplicado a "incerto demais também não conta como confirmado".
+  Depois dos dois filtros: de 298 produtos, 35 com `beneficios` real
+  (verificado manualmente que cada um bate com o próprio produto, sem
+  duplicata de conteúdo), 7 com `modoDeUso` separado por marcador
+  ("MODO DE USAR"/"COMO USAR") real no texto.
+
+### 19.6 Cores por categoria — mesmo índice, dois lookups
+
+`src/modules/magazine/category-colors.ts`: hash simples do nome da
+categoria → índice 0–7, usado em paralelo por `getCategoryWebClasses`
+(Tailwind, pro `MagazineView`) e `getCategoryPdfColors` (hex, pro
+`pdf-template.tsx`) — a mesma categoria cai sempre na mesma cor nos dois
+lugares, sem cadastro manual por categoria nova.
+
+### 19.7 PDF: rodapé fixo de verdade + última página dedicada
+
+`pdf-template.tsx` usa o prop `fixed` do `@react-pdf/renderer` (`<View
+fixed>`) pro rodapé com dados do consultor repetir automaticamente em toda
+página gerada — o motivo real de preferir essa lib a HTML convertido em vez
+de paginar por scroll. Última página nova: "Gostou de algum produto? Fale
+comigo no WhatsApp" + QR Code (gerado como data URL via `qrcode`, mesma lib
+de `src/lib/qrcode.ts`) + foto/nome/telefone/cidade do consultor. Link
+clicável real (`<Link src="https://wa.me/...">`) no lugar do texto antigo
+"Comprar".
+
+### 19.8 Consultor só vê a última edição publicada
+
+`/consultor/revista` deixou de listar todas as edições publicadas em grade
+— busca a mais recente (`listPublishedMagazineIssues()[0]`) e renderiza o
+`MagazineView` completo direto, com o perfil do consultor logado.
+`/consultor/revista/[id]` continua existindo (link direto/QR de uma edição
+específica), também com o `consultant` da sessão atual.
+`MagazineCoverPreview` (usado só pela grade antiga) foi removido.
+
+### 19.9 Página pública `/c/[slug]` — personalizada por quem compartilhou
+
+`QrCode` não tem relação FK com `User` (proposital, mesmo padrão de
+`AuditLog.actorId`) — `getQrCodeBySlug` ganhou `createdById` no `select`, e
+`app/c/[slug]/page.tsx` faz uma segunda query (`getMyProfile`) só quando
+`targetType === "REVISTA"`, pra montar o `consultant` de quem gerou o QR
+Code. É o caso de uso central do pedido: o cliente que escaneia o QR Code
+de um consultor entra em contato **com aquele consultor**, não com um dado
+genérico da revista.
+
+### 19.10 Verificação
+
+`npx tsc --noEmit`, `npm run lint`, `npm run build` limpos. Testado contra o
+Supabase real via rotas de verificação temporárias (removidas antes do
+commit): `buildMagazineSnapshot` pros 298 produtos reais (298/298
+processados, contagens de `volume`/`beneficios`/`modoDeUso` conferidas —
+ver seção 19.5), filtro Promoções com 0 produtos (estado vazio, PDF de
+capa+última página gerado sem erro), filtro Perfumes com 96 produtos
+(PDF de 19,3MB gerado com sucesso, cabeçalho `%PDF-1.3` válido). Fluxo
+completo de login (preencher `/consultor/perfil`, ver rodapé/CTA com dados
+reais como consultor, baixar PDF personalizado, escanear QR Code deslogado)
+depende de credenciais de usuário que não estão disponíveis neste ambiente
+de verificação — recomendado um teste manual rápido no navegador antes de
+considerar a fase encerrada.

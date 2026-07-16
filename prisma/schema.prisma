@@ -37,6 +37,14 @@ model User {
   city         String?
   state        String?
 
+  // Fase 7 v2 — perfil pessoal exibido na revista digital personalizada
+  // (rodapé/última página, ver PROJECT.md). `whatsapp` é separado de `phone`
+  // de propósito: precisa estar num formato confiável pro link wa.me/QR Code,
+  // enquanto `phone` é só um dado de cadastro sem esse requisito de formato.
+  whatsapp  String?
+  instagram String?
+  photoUrl  String?
+
   // Sem relação FK proposital: auditoria completa (quem aprovou o quê, quando)
   // fica para a tabela audit_logs prevista no PROJECT.md, fora do escopo da Fase 1.
   approvedById String?
@@ -343,21 +351,36 @@ enum MagazineFilterType {
   PROMOCOES
   PERFUMES
   SUPLEMENTOS
+  COSMETICOS
+}
+
+// Fase 7 v2 (2026-07-16): sem "mais vendidos" de verdade — não existe dado de
+// venda em lugar nenhum do sistema (a Atlântica não processa pedido dentro do
+// AtlHub). MAIS_VENDIDOS cai pro mesmo critério de NOME na prática (ver
+// generator.ts) — a opção existe na UI porque foi pedida, mas nunca finge um
+// número de vendas que não existe.
+enum MagazineSortBy {
+  LANCAMENTOS
+  MAIS_VENDIDOS
+  NOME
+  PRECO
 }
 
 // Sem model MagazinePage de propósito: a revista é renderizada como página
 // HTML responsiva (componente MagazineView, ver PROJECT.md) — o PDF agora é
-// só um export opcional sob demanda (`pdfUrl` fica null até alguém clicar
-// "Exportar PDF"), não mais a fonte de verdade da leitura.
+// gerado NA HORA, por consultor (rodapé/última página com o contato de quem
+// baixou), não armazenado — por isso não há mais `pdfUrl`/`coverImageUrl`
+// (a capa também virou automática, sem upload manual).
 model MagazineIssue {
-  id            String              @id @default(cuid())
-  title         String
-  pdfUrl        String?
-  coverImageUrl String?
-  status        MagazineIssueStatus @default(RASCUNHO)
-  publishedAt   DateTime?
+  id     String              @id @default(cuid())
+  title  String
+  status MagazineIssueStatus @default(RASCUNHO)
+  publishedAt DateTime?
 
-  filterType      MagazineFilterType @default(TODOS)
+  // Era um filtro único — agora uma lista (união/OR entre os marcados no
+  // admin); "Todos" ignora os demais.
+  filterTypes     MagazineFilterType[]
+  sortBy          MagazineSortBy       @default(NOME)
   productSnapshot Json?
 
   qrCodes QrCode[]

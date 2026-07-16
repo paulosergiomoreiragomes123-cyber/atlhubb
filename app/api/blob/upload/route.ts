@@ -5,10 +5,13 @@ import { getCurrentUser } from "@/src/modules/auth/dal";
 import { BLOB_UPLOAD_RULES, type BlobUploadKind } from "@/src/lib/blob";
 
 // Gera o token de upload direto-do-navegador (não recebe o arquivo — só
-// autoriza). Só admin pode subir material de revista.
+// autoriza). Fase 7 v2: o único kind hoje é a foto de perfil do próprio
+// consultor (ver src/lib/blob.ts) — qualquer usuário APROVADO pode subir a
+// própria foto, não é mais admin-only (era, quando o único uso era upload
+// de PDF/capa de revista pelo admin).
 export async function POST(request: Request) {
   const user = await getCurrentUser();
-  if (!user || user.status !== "APROVADO" || user.role !== "ADMIN") {
+  if (!user || user.status !== "APROVADO") {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
@@ -19,8 +22,8 @@ export async function POST(request: Request) {
       body,
       request,
       onBeforeGenerateToken: async (_pathname, clientPayload) => {
-        const kind = (clientPayload as BlobUploadKind) || "cover";
-        const rules = BLOB_UPLOAD_RULES[kind] ?? BLOB_UPLOAD_RULES.cover;
+        const kind = (clientPayload as BlobUploadKind) || "consultantPhoto";
+        const rules = BLOB_UPLOAD_RULES[kind] ?? BLOB_UPLOAD_RULES.consultantPhoto;
 
         return {
           allowedContentTypes: [...rules.allowedContentTypes],

@@ -17,6 +17,10 @@ export function getQrCodeBySlug(slug: string) {
     select: {
       id: true,
       targetType: true,
+      // Sem relação FK (proposital, mesmo padrão de AuditLog.actorId) — a
+      // página busca o perfil de quem criou numa segunda query só quando
+      // targetType é REVISTA (personalização da revista, ver PROJECT.md).
+      createdById: true,
       product: {
         select: {
           name: true,
@@ -32,9 +36,8 @@ export function getQrCodeBySlug(slug: string) {
       magazineIssue: {
         select: {
           title: true,
-          pdfUrl: true,
           status: true,
-          filterType: true,
+          filterTypes: true,
           productSnapshot: true,
           publishedAt: true,
           createdAt: true,

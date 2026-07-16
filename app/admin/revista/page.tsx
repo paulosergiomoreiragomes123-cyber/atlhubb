@@ -68,7 +68,7 @@ export default async function RevistaPage() {
             <TableRow key={issue.id}>
               <TableCell className="font-medium">{issue.title}</TableCell>
               <TableCell className="text-muted-foreground">
-                {MAGAZINE_FILTER_LABELS[issue.filterType]}
+                {issue.filterTypes.map((f) => MAGAZINE_FILTER_LABELS[f]).join(", ")}
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {Array.isArray(issue.productSnapshot) ? issue.productSnapshot.length : 0}
