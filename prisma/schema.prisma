@@ -1,0 +1,417 @@
+// Prisma schema do AtlHub.
+// Fase 1: autenticação e aprovação de usuários.
+// Fase 2: produtos, categorias, histórico de preços e a estrutura (só schema,
+// sem ingestão ainda) para o Guia Oficial, que chega de verdade na Fase 4.
+// Plataforma administrativa completa (antes da Fase 4): marcas, fornecedores,
+// galeria de imagens, estoque com histórico de movimentação, auditoria.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CONSULTOR
+  ADMIN
+}
+
+enum UserStatus {
+  AGUARDANDO
+  APROVADO
+  REPROVADO
+  SUSPENSO
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(CONSULTOR)
+  status       UserStatus @default(AGUARDANDO)
+  phone        String?
+  city         String?
+  state        String?
+
+  // Sem relação FK proposital: auditoria completa (quem aprovou o quê, quando)
+  // fica para a tabela audit_logs prevista no PROJECT.md, fora do escopo da Fase 1.
+  approvedById String?
+  approvedAt   DateTime?
+
+  // Bloqueio por força bruta (auditoria de segurança): 5 tentativas erradas
+  // trava o login por 15min. Zera no login certo. Ver auth.ts (authorize()).
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2 — Catálogo
+// ---------------------------------------------------------------------------
+
+enum ProductSource {
+  MANUAL
+  IMPORTADO
+}
+
+enum PriceSource {
+  AJUSTE_MANUAL
+  SYNC_LOJA
+}
+
+model ProductCategory {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  // Self-relation pra subcategoria. onDelete: SetNull de propósito: apagar uma
+  // categoria-pai não deve arrastar as filhas junto, só deixá-las "soltas".
+  parentId String?
+  parent   ProductCategory?  @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children ProductCategory[] @relation("CategoryChildren")
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+  @@map("product_categories")
+}
+
+model Brand {
+  id      String  @id @default(cuid())
+  name    String
+  slug    String  @unique
+  logoUrl String?
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("brands")
+}
+
+model Supplier {
+  id          String  @id @default(cuid())
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  notes       String?
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("suppliers")
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  sku         String        @unique
+  name        String
+  description String?
+  active      Boolean       @default(true)
+  // MANUAL até uma eventual integração de loja existir de verdade — nenhum
+  // produto é IMPORTADO ainda, mas o campo já nasce certo pra não precisar
+  // de migration extra depois (ver PROJECT.md seção 8).
+  source      ProductSource @default(MANUAL)
+
+  categoryId String?
+  category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  brandId String?
+  brand   Brand?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  images         ProductImage[]
+  prices         ProductPrice[]
+  stockMovements StockMovement[]
+  qrCodes        QrCode[]
+
+  // Fase 4 — IA. `attributes` é livre (notas olfativas, família, intensidade
+  // etc.), editável no admin, usado tanto no texto do embedding quanto nas
+  // respostas do assistente. `embedding` é Float[] (não pgvector) de
+  // propósito — ver PROJECT.md seção 11: Prisma 7 tem um bug conhecido com
+  // colunas Unsupported("vector") em drift detection, e pra um catálogo desse
+  // porte (não milhões de linhas) comparar embeddings em memória é suficiente
+  // e evita todo esse workaround. `embeddingHash` evita reembedar quando o
+  // texto-fonte não mudou.
+  attributes    Json?
+  embedding     Float[] @default([])
+  embeddingHash String?
+
+  // Fase 6A — sincronização com a loja pública (loja.atlanticanatural.com.br).
+  // Nulos para produto MANUAL. `storeProductId` é o "Código" numérico da loja
+  // (como string) — chave de upsert do sync, não o sku. `storeUrl` é o link
+  // canônico /produtos/{slug}, usado pela IA como "comprar" e pela ficha do
+  // produto. Ver src/modules/store-sync/sync.ts.
+  storeProductId String?   @unique
+  storeUrl       String?
+  lastSyncedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([supplierId])
+  @@index([storeProductId])
+  @@map("products")
+}
+
+// Galeria de imagens: URLs coladas pelo admin (sem upload de arquivo — ver
+// PROJECT.md). `position` define a ordem; a de position mais baixa é a capa.
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  url      String
+  alt      String?
+  position Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, position])
+  @@map("product_images")
+}
+
+// Histórico insert-only: nunca dá UPDATE em preço, sempre uma linha nova.
+// "Preço atual" = linha mais recente por productId (ver src/modules/products/queries.ts).
+model ProductPrice {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  priceCents Int
+  currency   String      @default("BRL")
+  source     PriceSource @default(AJUSTE_MANUAL)
+
+  effectiveFrom DateTime @default(now())
+
+  @@index([productId, effectiveFrom])
+  @@map("product_prices")
+}
+
+enum StockMovementReason {
+  ENTRADA
+  SAIDA
+  AJUSTE
+}
+
+// Mesmo padrão insert-only do preço: estoque atual = soma de quantityDelta
+// por productId (ver src/modules/stock/queries.ts). ENTRADA/AJUSTE positivo
+// somam, SAIDA/AJUSTE negativo subtraem — quantityDelta já vem com o sinal
+// certo, então "estoque atual" é sempre um SUM simples, sem lógica condicional.
+model StockMovement {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  quantityDelta Int
+  reason        StockMovementReason
+  note          String?
+
+  createdById String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, createdAt])
+  @@map("stock_movements")
+}
+
+// Log de auditoria: quem fez o quê, quando. actorId sem FK de propósito (igual
+// a User.approvedById) — o log deve sobreviver mesmo que o usuário autor seja
+// removido no futuro, então nome/e-mail do autor ficam congelados aqui no
+// momento da ação (denormalizado), não são um relation que quebra se o autor sumir.
+model AuditLog {
+  id String @id @default(cuid())
+
+  actorId    String?
+  actorName  String
+  actorEmail String
+
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4 — Guia Oficial ingerido via PDF (src/modules/guide/ingest.ts),
+// indexado por chunk com embedding pra RAG (mesmo padrão Float[] do Product
+// abaixo, não pgvector — mesmo motivo, ver Product.embedding).
+// ---------------------------------------------------------------------------
+
+enum GuideDocumentStatus {
+  PROCESSANDO
+  PRONTO
+  ERRO
+}
+
+model GuideDocument {
+  id      String              @id @default(cuid())
+  title   String
+  fileUrl String
+  version Int                 @default(1)
+  status  GuideDocumentStatus @default(PROCESSANDO)
+
+  chunks GuideChunk[]
+
+  createdAt DateTime @default(now())
+
+  @@map("guide_documents")
+}
+
+model GuideChunk {
+  id              String        @id @default(cuid())
+  guideDocumentId String
+  guideDocument   GuideDocument @relation(fields: [guideDocumentId], references: [id], onDelete: Cascade)
+
+  content    String
+  pageNumber Int?
+
+  embedding     Float[] @default([])
+  embeddingHash String?
+
+  createdAt DateTime @default(now())
+
+  @@map("guide_chunks")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4 — Assistente de IA
+// ---------------------------------------------------------------------------
+
+// `messages` guarda o array de UIMessage do AI SDK inteiro, não uma tabela
+// Message separada — é o formato que o próprio SDK já serializa a cada turno
+// (ver guia oficial de persistência de chat), então salvar direto evita
+// modelar manualmente parts/tool-calls/tool-results numa tabela relacional.
+model Conversation {
+  id     String  @id @default(cuid())
+  userId String
+  title  String?
+
+  messages Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+  @@map("conversations")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 5 — Revista digital e QR Code
+// ---------------------------------------------------------------------------
+
+enum MagazineIssueStatus {
+  RASCUNHO
+  PUBLICADA
+}
+
+// Sem model MagazinePage de propósito: o leitor usa o visualizador nativo de
+// PDF do navegador (navegação por página, zoom e busca já vêm de graça) em vez
+// de converter cada página em imagem — evita todo um pipeline de conversão
+// PDF→imagem só pra reimplementar o que o navegador já faz. Ver PROJECT.md seção 5.
+model MagazineIssue {
+  id            String              @id @default(cuid())
+  title         String
+  pdfUrl        String
+  coverImageUrl String?
+  status        MagazineIssueStatus @default(RASCUNHO)
+  publishedAt   DateTime?
+
+  qrCodes QrCode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("magazine_issues")
+}
+
+enum QrTargetType {
+  PRODUTO
+  CATALOGO
+  REVISTA
+}
+
+// Um QrCode por alvo (produto/catálogo/revista), reaproveitado por todo mundo
+// que compartilha aquele mesmo alvo — não é "um link por consultor", é "um
+// link por produto", com contagem agregada. Mais simples, e ainda cobre o
+// "tracking simples de acesso" pedido no roadmap. `slug` é o que aparece na
+// URL pública (/c/[slug]) — curto de propósito, pra caber bem num QR Code.
+model QrCode {
+  id         String       @id @default(cuid())
+  slug       String       @unique
+  targetType QrTargetType
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  magazineIssueId String?
+  magazineIssue   MagazineIssue? @relation(fields: [magazineIssueId], references: [id], onDelete: Cascade)
+
+  scanCount   Int     @default(0)
+  createdById String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([magazineIssueId])
+  @@map("qr_codes")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 6A — Sincronização com a loja pública (loja.atlanticanatural.com.br)
+// ---------------------------------------------------------------------------
+
+enum StoreSyncStatus {
+  EM_ANDAMENTO
+  CONCLUIDO
+  ERRO
+}
+
+// Histórico insert-only de cada execução do crawler (manual pelo admin ou via
+// cron) — mesmo padrão de log de AuditLog. Dá "última sincronização" e
+// contadores pro painel /admin/loja sem precisar calcular nada em tempo real.
+model StoreSyncRun {
+  id     String          @id @default(cuid())
+  status StoreSyncStatus @default(EM_ANDAMENTO)
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  categoriesFound Int  @default(0)
+  productsFound   Int  @default(0)
+  created         Int  @default(0)
+  updated         Int  @default(0)
+  unchanged       Int  @default(0)
+  errors          Json?
+
+  // "cron" ou o id do admin que clicou em "Sincronizar loja agora".
+  triggeredBy String?
+
+  @@index([startedAt])
+  @@map("store_sync_runs")
+}

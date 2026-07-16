@@ -13,6 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // O projeto já usa `_prevState` como convenção pro parâmetro não usado
+      // de useActionState (ex.: importProductsCsvAction) — sem isso, o aviso
+      // só não aparecia por coincidência (o rule default "after-used" ignora
+      // args não usados antes do último usado, o que só funciona quando há
+      // um segundo parâmetro usado depois). Deixa a convenção explícita.
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+    },
+  },
 ]);
 
 export default eslintConfig;

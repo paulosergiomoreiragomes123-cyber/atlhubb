@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# prisma (client é gerado no postinstall via `prisma generate`)
+/src/generated/prisma
+
+# fonte do Guia Oficial (PDF grande, binário) — depois de `npm run guide:ingest`
+# o banco (GuideDocument/GuideChunk) é a fonte de verdade em runtime
+.claude/knowledge/
+
+# tesseract.js baixa isso em runtime pro OCR (fallback do guide:ingest quando
+# o PDF é escaneado, ver PROJECT.md seção 9) — não é código-fonte
+/*.traineddata
