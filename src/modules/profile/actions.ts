@@ -23,12 +23,23 @@ export async function updateProfileAction(input: ProfileInput): Promise<ActionRe
   await prisma.user.update({
     where: { id: user.id },
     data: {
+      name: parsed.data.name,
+      jobTitle: parsed.data.jobTitle || null,
       whatsapp: parsed.data.whatsapp || null,
       instagram: parsed.data.instagram || null,
+      city: parsed.data.city || null,
+      state: parsed.data.state || null,
       photoUrl: parsed.data.photoUrl || null,
+      magazineMessage: parsed.data.magazineMessage || null,
+      coverColor: parsed.data.coverColor,
+      showQrCode: parsed.data.showQrCode,
+      showPhoto: parsed.data.showPhoto,
+      showInstagram: parsed.data.showInstagram,
+      showCity: parsed.data.showCity,
     },
   });
 
   revalidatePath("/consultor/perfil");
   revalidatePath("/consultor/revista");
+  revalidatePath("/consultor/revista/[id]", "page");
 }

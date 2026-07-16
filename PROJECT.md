@@ -1094,3 +1094,89 @@ reais como consultor, baixar PDF personalizado, escanear QR Code deslogado)
 depende de credenciais de usuário que não estão disponíveis neste ambiente
 de verificação — recomendado um teste manual rápido no navegador antes de
 considerar a fase encerrada.
+
+---
+
+## 20. Fase 7.3 — Perfil completo de personalização (implementada 2026-07-16)
+
+### 20.1 `/consultor/perfil` vira o painel de identidade da revista
+
+O pedido foi expandir o perfil (seção 19.2) pra cobrir toda a
+personalização visual/de contato da revista, não só WhatsApp/Instagram/
+foto. `User` ganhou `jobTitle`, `magazineMessage`, `coverColor`
+(`MagazineCoverColor`: VERDE/AZUL/ROXO/DOURADO, default VERDE) e quatro
+interruptores (`showQrCode`/`showPhoto`/`showInstagram`/`showCity`, todos
+`@default(true)`). Os interruptores controlam só a **exibição na revista**
+— desligar "mostrar cidade" não apaga `city`, só oculta nas duas
+renderizações (`MagazineView`/`pdf-template.tsx`); o dado continua salvo e
+volta a aparecer se o consultor religar depois.
+
+A tela virou três seções (`ProfileForm`): **Dados do consultor** (foto,
+nome, WhatsApp, Instagram, cidade, estado, cargo — nome editável agora,
+antes só existia no cadastro), **Personalização da revista** (mensagem
+automática do CTA de WhatsApp, cor da capa) e **Opções de exibição**
+(quatro `Switch`). `name`/`city`/`state` passaram a ser editáveis
+self-service pela primeira vez (antes só o admin editava via
+`/admin/usuarios`) — sem conflito real, é o mesmo padrão de "quem mexeu por
+último vale" já aceito em outras telas do sistema.
+
+### 20.2 Uma única fonte de defaults: `buildConsultantInfo`
+
+Antes, cada uma das 4 páginas que montam `ConsultantInfo` (preview do
+admin, leitor do consultor, `/consultor/revista/[id]`, `/c/[slug]`, PDF sob
+demanda) construía o objeto campo a campo — arriscado com 14 campos agora.
+`src/modules/profile/queries.ts` ganhou `buildConsultantInfo(profile,
+fallbackName)`, com os mesmos defaults do schema Prisma num único lugar;
+todo consumidor agora é `buildConsultantInfo(await getMyProfile(id),
+fallbackName)`. O preview do admin (`/admin/revista/[id]`) deixou de usar
+campos fixos `null` e passou a ler o perfil real do próprio admin (se ele
+tiver preenchido `/consultor/perfil`) — mais correto e sem duplicar lógica.
+
+### 20.3 Cor da capa — `src/modules/magazine/cover-colors.ts`
+
+Mesmo princípio de `category-colors.ts`: um `Record<CoverColor, ...>` só,
+com um lookup pro web (gradiente CSS em `oklch()`, aplicado inline no
+`Cover` do `MagazineView`, substituindo o gradiente fixo anterior) e outro
+pro PDF (cor sólida hex, já que `@react-pdf/renderer` não entende
+`oklch()`/gradiente de `View` sem montar `<Svg>` à parte — uma cor sólida
+por opção já cumpre "muda a identidade visual da capa" sem complexidade
+extra). Só a capa muda de cor — o resto do tema (`.magazine-theme`,
+cores de categoria) continua igual, por decisão de escopo (pedido foi
+específico: "a cor da capa").
+
+### 20.4 Última página vira "cartão de contato profissional"
+
+`FinalSection` (web) e a última `Page` (PDF) ganharam `jobTitle` (Cargo,
+logo abaixo do nome) e uma linha explícita "WhatsApp: {número}" — antes só
+o link/QR Code carregavam essa informação, não havia o texto puro. Foto,
+QR Code e cidade nessa página agora respeitam `showPhoto`/`showQrCode`/
+`showCity`. Instagram não foi adicionado à última página (não fazia parte
+do pedido) — continua só no rodapé de cada página, ali sim controlado por
+`showInstagram`.
+
+### 20.5 Mensagem automática
+
+`consultant.magazineMessage` substitui o texto fixo "Olá! Vi a revista da
+Atlântica Natural e quero saber mais." no link/QR Code de WhatsApp da
+seção final/última página quando preenchido (`|| DEFAULT_MAGAZINE_MESSAGE`,
+mesmo texto de exemplo do pedido do cliente) — vazio cai pro texto padrão,
+nunca fica sem mensagem. A mensagem por produto (`"Tenho interesse no
+produto X (Código Y)"`) não foi alterada — é mais específica que a genérica
+e não fazia parte do pedido.
+
+### 20.6 Verificação
+
+`npx tsc --noEmit`, `npm run lint`, `npm run build` limpos após `npx prisma
+db push` (campos novos aditivos, sem perda de dado). Testado via rota
+temporária (removida antes do commit) que gera um PDF real com
+`renderMagazinePdf` e extrai o texto de volta com `unpdf` (`extractText` —
+já usado na ingestão do Guia, seção 9): com os quatro interruptores ligados,
+cidade/Instagram/cargo/"WhatsApp:" aparecem no texto extraído do PDF; com
+`showCity`/`showInstagram` desligados, cidade e Instagram somem do texto
+(cargo e WhatsApp continuam, como esperado — não são controlados por
+interruptor). As 4 cores de capa (`VERDE`/`AZUL`/`ROXO`/`DOURADO`) geram
+PDFs com tamanho de arquivo diferente entre si, confirmando que a cor
+escolhida realmente muda o byte final gerado. Fluxo de login real
+(preencher o formulário no navegador, ver o resultado na revista) continua
+fora do alcance deste ambiente por falta de credenciais — mesma ressalva da
+seção 19.10.

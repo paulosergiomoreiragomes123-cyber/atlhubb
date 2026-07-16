@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { getQrCodeBySlug, incrementScanCount } from "@/src/modules/qrcode/queries";
 import { listActiveProducts } from "@/src/modules/products/queries";
 import { formatCents } from "@/src/lib/currency";
-import { getMyProfile } from "@/src/modules/profile/queries";
+import { getMyProfile, buildConsultantInfo } from "@/src/modules/profile/queries";
 import { MagazineView, type ConsultantInfo, type MagazineIssueForView } from "@/src/components/magazine/magazine-view";
 
 export const metadata: Metadata = { title: "AtlHub" };
@@ -45,14 +45,7 @@ export default async function CompartilhamentoPage({
     // quem gerou o link. É esse consultor que quem escaneia o QR Code
     // contata, não um dado genérico da edição (ver PROJECT.md).
     const creatorProfile = qrCode.createdById ? await getMyProfile(qrCode.createdById) : null;
-    const consultant: ConsultantInfo = {
-      name: creatorProfile?.name ?? "Atlântica Natural",
-      phone: creatorProfile?.phone ?? null,
-      whatsapp: creatorProfile?.whatsapp ?? null,
-      city: creatorProfile?.city ?? null,
-      instagram: creatorProfile?.instagram ?? null,
-      photoUrl: creatorProfile?.photoUrl ?? null,
-    };
+    const consultant = buildConsultantInfo(creatorProfile, "Atlântica Natural");
 
     return <RevistaPublica issue={qrCode.magazineIssue} consultant={consultant} />;
   }

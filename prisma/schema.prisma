@@ -26,6 +26,17 @@ enum UserStatus {
   SUSPENSO
 }
 
+// Fase 7.2 (2026-07-16) — cor de identidade visual da CAPA da revista
+// personalizada, escolhida pelo próprio consultor em /consultor/perfil (ver
+// src/modules/magazine/cover-colors.ts, que traduz cada valor pra um
+// gradiente CSS no web e uma cor sólida hex no PDF).
+enum MagazineCoverColor {
+  VERDE
+  AZUL
+  ROXO
+  DOURADO
+}
+
 model User {
   id           String     @id @default(cuid())
   name         String
@@ -44,6 +55,20 @@ model User {
   whatsapp  String?
   instagram String?
   photoUrl  String?
+
+  // Fase 7.2 — perfil completo de personalização da revista (/consultor/perfil):
+  // cargo exibido na última página, mensagem automática do CTA de WhatsApp
+  // (cai pro texto padrão quando vazio, ver src/lib/whatsapp.ts) e os
+  // interruptores "mostrar X" controlam SÓ a revista personalizada — nunca
+  // apagam o dado em si (ex.: desligar "mostrar cidade" não limpa `city`,
+  // só oculta na revista).
+  jobTitle        String?
+  magazineMessage String?
+  coverColor      MagazineCoverColor @default(VERDE)
+  showQrCode      Boolean            @default(true)
+  showPhoto       Boolean            @default(true)
+  showInstagram   Boolean            @default(true)
+  showCity        Boolean            @default(true)
 
   // Sem relação FK proposital: auditoria completa (quem aprovou o quê, quando)
   // fica para a tabela audit_logs prevista no PROJECT.md, fora do escopo da Fase 1.

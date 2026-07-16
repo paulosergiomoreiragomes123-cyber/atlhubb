@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/src/modules/auth/dal";
 import { prisma } from "@/src/lib/prisma";
 import { renderMagazinePdf } from "@/src/modules/magazine/pdf-template";
-import type { ConsultantInfo } from "@/src/components/magazine/magazine-view";
+import { getMyProfile, buildConsultantInfo } from "@/src/modules/profile/queries";
 import type { ProductSnapshotItem } from "@/src/modules/magazine/generator";
 
 // PDF gerado NA HORA, por consultor — nunca armazenado (ver PROJECT.md,
@@ -32,15 +32,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Edição não encontrada." }, { status: 404 });
   }
 
-  const profile = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { name: true, phone: true, whatsapp: true, city: true, instagram: true, photoUrl: true },
-  });
+  const profile = await getMyProfile(user.id);
   if (!profile) {
     return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 });
   }
 
-  const consultant: ConsultantInfo = profile;
+  const consultant = buildConsultantInfo(profile, user.name);
   const snapshot = (issue.productSnapshot ?? []) as unknown as ProductSnapshotItem[];
 
   try {

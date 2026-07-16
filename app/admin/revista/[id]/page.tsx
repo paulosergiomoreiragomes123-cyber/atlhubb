@@ -20,7 +20,8 @@ import {
   deleteMagazineIssueAction,
 } from "@/src/modules/magazine/actions";
 import { RenameMagazineForm } from "@/src/components/admin/rename-magazine-form";
-import { MagazineView, type ConsultantInfo } from "@/src/components/magazine/magazine-view";
+import { MagazineView } from "@/src/components/magazine/magazine-view";
+import { getMyProfile, buildConsultantInfo } from "@/src/modules/profile/queries";
 import { BackLink } from "@/src/components/admin/back-link";
 
 export const metadata: Metadata = { title: "Editar edição — AtlHub" };
@@ -33,20 +34,13 @@ export default async function EditarRevistaPage({
   const admin = await requireAdmin();
   const { id } = await params;
 
-  const issue = await getMagazineIssue(id);
+  const [issue, profile] = await Promise.all([getMagazineIssue(id), getMyProfile(admin.id)]);
   if (!issue) notFound();
 
-  // Preview usa os dados do próprio admin logado — se WhatsApp/Instagram/
-  // foto estiverem vazios (comum pra um admin, que não é consultor de
-  // verdade), os campos simplesmente somem do preview, nunca inventados.
-  const previewConsultant: ConsultantInfo = {
-    name: admin.name,
-    phone: null,
-    whatsapp: null,
-    city: null,
-    instagram: null,
-    photoUrl: null,
-  };
+  // Preview usa os dados reais do próprio admin logado (se ele tiver
+  // preenchido /consultor/perfil) — campos vazios simplesmente somem do
+  // preview, nunca inventados.
+  const previewConsultant = buildConsultantInfo(profile, admin.name);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">

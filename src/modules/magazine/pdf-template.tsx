@@ -13,8 +13,11 @@ import {
 import { formatCents } from "@/src/lib/currency";
 import { buildWhatsappLink } from "@/src/lib/whatsapp";
 import { getCategoryPdfColors } from "@/src/modules/magazine/category-colors";
+import { getCoverPdfColor } from "@/src/modules/magazine/cover-colors";
 import type { ProductSnapshotItem } from "@/src/modules/magazine/generator";
 import type { ConsultantInfo } from "@/src/components/magazine/magazine-view";
+
+const DEFAULT_MAGAZINE_MESSAGE = "Olá! Vi sua revista e gostaria de saber mais.";
 
 // Mesma paleta de app/globals.css (.magazine-theme), convertida pra hex —
 // @react-pdf/renderer não entende oklch(), só hex/rgb/named colors.
@@ -126,8 +129,11 @@ function Footer({ consultant }: { consultant: ConsultantInfo }) {
     { label: "Consultor", value: consultant.name },
     consultant.phone ? { label: "Telefone", value: consultant.phone } : null,
     consultant.whatsapp ? { label: "WhatsApp", value: consultant.whatsapp } : null,
-    consultant.city ? { label: "Cidade", value: consultant.city } : null,
-    consultant.instagram ? { label: "Instagram", value: consultant.instagram } : null,
+    // Cidade/Instagram respeitam as opções de exibição do perfil.
+    consultant.showCity && consultant.city ? { label: "Cidade", value: consultant.city } : null,
+    consultant.showInstagram && consultant.instagram
+      ? { label: "Instagram", value: consultant.instagram }
+      : null,
   ].filter((line): line is { label: string; value: string } => line !== null);
 
   return (
@@ -173,7 +179,7 @@ function MagazineDocument({
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <View style={styles.cover}>
+        <View style={[styles.cover, { backgroundColor: getCoverPdfColor(consultant.coverColor) }]}>
           <Text style={styles.coverKicker}>ATLÂNTICA NATURAL</Text>
           <Text style={styles.coverWordmark}>AtlHub</Text>
           <Text style={styles.coverSubtitle}>REVISTA DIGITAL</Text>
@@ -249,12 +255,20 @@ function MagazineDocument({
         <View style={styles.lastPage}>
           <Text style={styles.lastPageTitle}>Gostou de algum produto?</Text>
           <Text style={styles.lastPageText}>Entre em contato comigo pelo WhatsApp.</Text>
-          {qrDataUrl && <PdfImage src={qrDataUrl} style={styles.qrImage} />}
+          {qrDataUrl && consultant.showQrCode && <PdfImage src={qrDataUrl} style={styles.qrImage} />}
           {whatsappLink && <Link src={whatsappLink} style={styles.ctaBadge}>💬 Falar no WhatsApp</Link>}
-          {consultant.photoUrl && <PdfImage src={consultant.photoUrl} style={styles.consultantPhoto} />}
+          {consultant.photoUrl && consultant.showPhoto && (
+            <PdfImage src={consultant.photoUrl} style={styles.consultantPhoto} />
+          )}
           <Text style={styles.consultantName}>{consultant.name}</Text>
+          {consultant.jobTitle && <Text style={styles.consultantDetail}>{consultant.jobTitle}</Text>}
           {consultant.phone && <Text style={styles.consultantDetail}>{consultant.phone}</Text>}
-          {consultant.city && <Text style={styles.consultantDetail}>{consultant.city}</Text>}
+          {consultant.whatsapp && (
+            <Text style={styles.consultantDetail}>WhatsApp: {consultant.whatsapp}</Text>
+          )}
+          {consultant.showCity && consultant.city && (
+            <Text style={styles.consultantDetail}>{consultant.city}</Text>
+          )}
         </View>
       </Page>
     </Document>
@@ -270,8 +284,11 @@ export async function renderMagazinePdf({
   products: ProductSnapshotItem[];
   consultant: ConsultantInfo;
 }): Promise<Buffer> {
-  const whatsappLink = buildWhatsappLink(consultant.whatsapp, "Olá! Vi a revista da Atlântica Natural e quero saber mais.");
-  const qrDataUrl = whatsappLink ? await QRCode.toDataURL(whatsappLink, { width: 240, margin: 1 }) : null;
+  const whatsappLink = buildWhatsappLink(consultant.whatsapp, consultant.magazineMessage || DEFAULT_MAGAZINE_MESSAGE);
+  const qrDataUrl =
+    whatsappLink && consultant.showQrCode
+      ? await QRCode.toDataURL(whatsappLink, { width: 240, margin: 1 })
+      : null;
 
   return renderToBuffer(
     <MagazineDocument

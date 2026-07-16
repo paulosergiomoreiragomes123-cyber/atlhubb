@@ -5,9 +5,9 @@ import { ChevronLeft, Download } from "lucide-react";
 
 import { requireApprovedUser } from "@/src/modules/auth/dal";
 import { getPublishedMagazineIssue } from "@/src/modules/magazine/queries";
-import { getMyProfile } from "@/src/modules/profile/queries";
+import { getMyProfile, buildConsultantInfo } from "@/src/modules/profile/queries";
 import { ShareButton } from "@/src/components/consultor/share-button";
-import { MagazineView, type ConsultantInfo } from "@/src/components/magazine/magazine-view";
+import { MagazineView } from "@/src/components/magazine/magazine-view";
 
 export const metadata: Metadata = { title: "Revista digital — AtlHub" };
 
@@ -22,14 +22,7 @@ export default async function LeitorRevistaPage({
   const [issue, profile] = await Promise.all([getPublishedMagazineIssue(id), getMyProfile(user.id)]);
   if (!issue) notFound();
 
-  const consultant: ConsultantInfo = {
-    name: user.name,
-    phone: profile?.phone ?? null,
-    whatsapp: profile?.whatsapp ?? null,
-    city: profile?.city ?? null,
-    instagram: profile?.instagram ?? null,
-    photoUrl: profile?.photoUrl ?? null,
-  };
+  const consultant = buildConsultantInfo(profile, user.name);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 pb-10">

@@ -6,8 +6,11 @@ import { formatCents } from "@/src/lib/currency";
 import { buildWhatsappLink } from "@/src/lib/whatsapp";
 import { MAGAZINE_FILTER_LABELS } from "@/src/modules/magazine/schemas";
 import { getCategoryWebClasses } from "@/src/modules/magazine/category-colors";
+import { getCoverWebGradient, type CoverColor } from "@/src/modules/magazine/cover-colors";
 import type { ProductSnapshotItem } from "@/src/modules/magazine/generator";
 import type { MagazineFilterType } from "@/src/generated/prisma/client";
+
+const DEFAULT_MAGAZINE_MESSAGE = "Olá! Vi sua revista e gostaria de saber mais.";
 
 const MONTHS_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -23,8 +26,16 @@ export type ConsultantInfo = {
   phone: string | null;
   whatsapp: string | null;
   city: string | null;
+  state: string | null;
   instagram: string | null;
   photoUrl: string | null;
+  jobTitle: string | null;
+  magazineMessage: string | null;
+  coverColor: CoverColor;
+  showQrCode: boolean;
+  showPhoto: boolean;
+  showInstagram: boolean;
+  showCity: boolean;
 };
 
 export type MagazineIssueForView = {
@@ -54,9 +65,12 @@ export async function MagazineView({
   const coverImageUrl = products[0]?.imageUrl ?? null;
   const whatsappCtaLink = buildWhatsappLink(
     consultant.whatsapp,
-    `Olá! Vi a revista da Atlântica Natural e quero saber mais.`
+    consultant.magazineMessage || DEFAULT_MAGAZINE_MESSAGE
   );
-  const qrDataUrl = whatsappCtaLink ? await QRCode.toDataURL(whatsappCtaLink, { width: 240, margin: 1 }) : null;
+  const qrDataUrl =
+    whatsappCtaLink && consultant.showQrCode
+      ? await QRCode.toDataURL(whatsappCtaLink, { width: 240, margin: 1 })
+      : null;
 
   return (
     <div className="magazine-theme flex flex-col overflow-hidden rounded-xl">
@@ -65,6 +79,7 @@ export async function MagazineView({
         refDate={refDate}
         filterTypes={issue.filterTypes}
         coverImageUrl={coverImageUrl}
+        coverColor={consultant.coverColor}
       />
 
       <div className="px-4 py-10 sm:px-8">
@@ -93,11 +108,13 @@ function Cover({
   refDate,
   filterTypes,
   coverImageUrl,
+  coverColor,
 }: {
   title: string;
   refDate: Date;
   filterTypes: MagazineFilterType[];
   coverImageUrl: string | null;
+  coverColor: CoverColor;
 }) {
   return (
     <div className="relative flex flex-col items-center justify-center gap-4 overflow-hidden p-10 text-center sm:aspect-[16/7]">
@@ -112,7 +129,7 @@ function Cover({
       )}
       <div
         className="absolute inset-0"
-        style={{ background: "linear-gradient(135deg, var(--magazine-primary), oklch(0.24 0.05 155))" }}
+        style={{ background: getCoverWebGradient(coverColor) }}
       />
       <div className="relative flex flex-col items-center gap-3">
         <span className="text-xs tracking-[0.3em] text-[var(--magazine-primary-foreground)] uppercase opacity-80">
@@ -220,8 +237,10 @@ function ConsultantFooter({ consultant }: { consultant: ConsultantInfo }) {
     { label: "Consultor", value: consultant.name },
     { label: "Telefone", value: consultant.phone },
     { label: "WhatsApp", value: consultant.whatsapp },
-    { label: "Cidade", value: consultant.city },
-    { label: "Instagram", value: consultant.instagram },
+    // Cidade/Instagram respeitam as opções de exibição do perfil
+    // (/consultor/perfil) — desligado ali, some daqui também.
+    { label: "Cidade", value: consultant.showCity ? consultant.city : null },
+    { label: "Instagram", value: consultant.showInstagram ? consultant.instagram : null },
   ].filter((line) => line.value);
 
   if (lines.length === 0) return null;
@@ -248,6 +267,10 @@ function FinalSection({
 }) {
   if (!whatsappLink) return null;
 
+  // Página de contato profissional: nome, cargo, cidade, WhatsApp, QR Code
+  // e foto — cada um só aparece se a opção de exibição do perfil estiver
+  // ligada (foto/QR Code/cidade); telefone é dado de cadastro, sempre
+  // mostrado quando existe (funcionalidade já existente, não removida).
   return (
     <div className="flex flex-col items-center gap-4 bg-[var(--magazine-primary)] px-6 py-12 text-center text-[var(--magazine-primary-foreground)]">
       <h2 className="font-[var(--magazine-font-display)] text-2xl font-medium">
@@ -255,7 +278,7 @@ function FinalSection({
       </h2>
       <p className="max-w-sm text-sm opacity-90">Entre em contato comigo pelo WhatsApp.</p>
 
-      {qrDataUrl && (
+      {qrDataUrl && consultant.showQrCode && (
         <div className="relative h-40 w-40 overflow-hidden rounded-lg bg-white p-2">
           <Image src={qrDataUrl} alt="QR Code do WhatsApp" fill className="object-contain" unoptimized />
         </div>
@@ -271,14 +294,16 @@ function FinalSection({
       </a>
 
       <div className="flex flex-col items-center gap-2 pt-4">
-        {consultant.photoUrl && (
+        {consultant.photoUrl && consultant.showPhoto && (
           <div className="relative h-20 w-20 overflow-hidden rounded-full border-2 border-[var(--magazine-primary-foreground)]">
             <Image src={consultant.photoUrl} alt={consultant.name} fill className="object-cover" unoptimized />
           </div>
         )}
         <span className="font-medium">{consultant.name}</span>
+        {consultant.jobTitle && <span className="text-sm opacity-90">{consultant.jobTitle}</span>}
         {consultant.phone && <span className="text-sm opacity-90">{consultant.phone}</span>}
-        {consultant.city && <span className="text-sm opacity-90">{consultant.city}</span>}
+        {consultant.whatsapp && <span className="text-sm opacity-90">WhatsApp: {consultant.whatsapp}</span>}
+        {consultant.showCity && consultant.city && <span className="text-sm opacity-90">{consultant.city}</span>}
       </div>
     </div>
   );
