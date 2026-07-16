@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { createAgentUIStreamResponse } from "ai";
+import { createAgentUIStreamResponse, safeValidateUIMessages } from "ai";
 
 import { getCurrentUser } from "@/src/modules/auth/dal";
 import { atlhubAssistant, type AtlhubUIMessage } from "@/src/modules/ai/agent";
+import { atlhubTools } from "@/src/modules/ai/tools";
 import { loadConversation, saveConversationMessages } from "@/src/modules/ai/conversations";
 
 // Respostas com tool calls podem levar mais que os ~10s default de algumas
@@ -17,17 +18,49 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
-  const { id, message }: { id: string; message: AtlhubUIMessage } = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Corpo da requisição inválido." }, { status: 400 });
+  }
+
+  // O DefaultChatTransport do AI SDK instalado manda { id, messages, trigger,
+  // messageId } — o histórico INTEIRO da conversa (this.state.messages) a
+  // cada request, não só a mensagem nova. Um formato antigo { id, message }
+  // (mensagem única) já não é o que o client manda; ler "message" aqui
+  // resultava em `undefined` sendo empilhado no array e o AI SDK rejeitando
+  // com AI_TypeValidationError/ZodError antes mesmo de chamar o modelo.
+  const { id, messages: rawMessages } = (typeof body === "object" && body !== null ? body : {}) as {
+    id?: unknown;
+    messages?: unknown;
+  };
+  if (typeof id !== "string" || !id) {
+    return NextResponse.json({ error: "Conversa inválida." }, { status: 400 });
+  }
 
   // loadConversation já filtra por userId — se o ID não é do usuário logado
-  // (ou não existe), cai aqui, nunca vaza a conversa de outra pessoa.
+  // (ou não existe), cai aqui, nunca vaza a conversa de outra pessoa. Não
+  // precisamos mais do `conversation.messages` salvo pra montar o array (o
+  // client já manda o histórico completo) — só usamos pra confirmar posse.
   const conversation = await loadConversation(id, user.id);
   if (!conversation) {
     return NextResponse.json({ error: "Conversa não encontrada." }, { status: 404 });
   }
 
-  const previousMessages = (conversation.messages ?? []) as unknown as AtlhubUIMessage[];
-  const messages = [...previousMessages, message];
+  // Valida o array contra o schema real do agente (mesmas tools) em vez de
+  // só um cast de tipo — qualquer formato inesperado vira um 400 legível em
+  // vez de um ZodError não tratado estourando como 500.
+  const validation = await safeValidateUIMessages<AtlhubUIMessage>({
+    messages: rawMessages,
+    tools: atlhubTools,
+  });
+  if (!validation.success) {
+    console.error("[ai] Mensagens inválidas recebidas do cliente:", validation.error);
+    return NextResponse.json({ error: "Mensagens inválidas." }, { status: 400 });
+  }
+
+  const messages = validation.data;
 
   return createAgentUIStreamResponse({
     agent: atlhubAssistant,

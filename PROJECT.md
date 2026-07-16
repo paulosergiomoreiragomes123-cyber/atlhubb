@@ -598,6 +598,12 @@ Acontece dentro das Server Actions de produto que já existiam (`createProductAc
 
 `Conversation.messages` guarda o array de `UIMessage` do AI SDK inteiro (ver seção 6.9) — decisão confirmada com o cliente (não efêmero). Toda query filtra por `userId`, nunca só por `id da conversa` — proteção contra um consultor ler a conversa de outro.
 
+### 11.8 Bug corrigido (2026-07-16): `/api/ia` esperava o protocolo errado do AI SDK
+
+`app/api/ia/route.ts` lia `{ id, message }` (uma mensagem nova, singular) do corpo da requisição — formato de uma versão mais antiga do AI SDK. O `DefaultChatTransport` da versão realmente instalada (`ai@7.0.26`) manda `{ id, messages, trigger, messageId }`: o **histórico inteiro** da conversa (`this.state.messages`) a cada request, em `messages` (plural), não uma mensagem única. Como a rota lia a chave errada, `message` vinha `undefined`, e `[...previousMessages, undefined]` quebrava a validação interna do AI SDK com `AI_TypeValidationError`/`ZodError` — um HTTP 500 cru, não a degradação graciosa esperada (esse erro acontece na validação da lista de mensagens, antes mesmo de chegar no `onError` do stream).
+
+**Fix**: ler `messages` (plural) do corpo, e validar com `safeValidateUIMessages<AtlhubUIMessage>({ messages, tools: atlhubTools })` (função oficial do AI SDK pra isso) em vez de um cast de tipo sem validação de verdade — qualquer formato inesperado agora vira um `400 { error: "Mensagens inválidas." }` legível, nunca mais um 500 não tratado. Como o client já manda o histórico completo, `conversation.messages` salvo no banco não precisa mais ser lido pra montar o array enviado ao agente — só continua sendo usado (via `loadConversation`) pra confirmar que a conversa pertence ao usuário logado (proteção de IDOR, inalterada). Testado ao vivo local: payload no formato atual (`messages` + `trigger`) chega até a chamada de modelo (degrada graciosamente por falta de `AI_GATEWAY_API_KEY`, como esperado); payload no formato antigo (`message` singular) e corpo malformado agora retornam 400 limpo em vez de crashar.
+
 ---
 
 ## 12. Estratégia para Revista Digital e QR Code (implementada — Fase 5)
