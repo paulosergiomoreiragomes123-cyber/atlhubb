@@ -8,8 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { getQrCodeBySlug, incrementScanCount } from "@/src/modules/qrcode/queries";
 import { listActiveProducts } from "@/src/modules/products/queries";
 import { formatCents } from "@/src/lib/currency";
-import { getMyProfile, buildConsultantInfo } from "@/src/modules/profile/queries";
-import { MagazineView, type ConsultantInfo, type MagazineIssueForView } from "@/src/components/magazine/magazine-view";
+import { MagazinePdfViewer } from "@/src/components/magazine/magazine-pdf-viewer";
 
 export const metadata: Metadata = { title: "AtlHub" };
 
@@ -40,14 +39,11 @@ export default async function CompartilhamentoPage({
   if (qrCode.targetType === "REVISTA") {
     if (!qrCode.magazineIssue || qrCode.magazineIssue.status !== "PUBLICADA") notFound();
 
-    // Sem relação FK entre QrCode e User (proposital, ver
-    // src/modules/qrcode/queries.ts) — segunda query pra achar o perfil de
-    // quem gerou o link. É esse consultor que quem escaneia o QR Code
-    // contata, não um dado genérico da edição (ver PROJECT.md).
-    const creatorProfile = qrCode.createdById ? await getMyProfile(qrCode.createdById) : null;
-    const consultant = buildConsultantInfo(creatorProfile, "Atlântica Natural");
-
-    return <RevistaPublica issue={qrCode.magazineIssue} consultant={consultant} />;
+    // Sem login (quem escaneia é o CLIENTE do consultor, não uma conta do
+    // AtlHub) — por isso o PDF vem de /api/c/[slug]/pdf, a contraparte
+    // pública de /api/revista/[id]/pdf, autorizada pelo próprio slug em vez
+    // de sessão. Ela resolve sozinha o consultor que criou o link.
+    return <RevistaPublica slug={slug} />;
   }
 
   const products = await listActiveProducts();
@@ -102,16 +98,10 @@ function ProdutoPublico({
   );
 }
 
-function RevistaPublica({
-  issue,
-  consultant,
-}: {
-  issue: MagazineIssueForView;
-  consultant: ConsultantInfo;
-}) {
+function RevistaPublica({ slug }: { slug: string }) {
   return (
     <div className="mx-auto max-w-4xl pb-10">
-      <MagazineView issue={issue} consultant={consultant} />
+      <MagazinePdfViewer src={`/api/c/${slug}/pdf`} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
-// Sem "server-only" de propósito — mesmo motivo de category-themes.ts:
-// usado tanto pelo MagazineView (Server Component) quanto pelo
-// official-pdf-assembler.ts, que pode rodar fora do bundler do Next.
+// Sem "server-only" de propósito: usado por generator.ts (Server Component/
+// Route Handler) e por official-pdf-assembler.ts, que pode rodar fora do
+// bundler do Next.
 
 // Produtos de perfume sincronizados vêm como "Fragrância Rouge 100ml" ou
 // "Fragráncia Match 15ml" (as duas grafias existem de verdade nos dados

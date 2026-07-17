@@ -10,8 +10,8 @@ export type ActionResult = { message: string } | void;
 
 // Self-service — cada consultor só edita o próprio perfil (requireApprovedUser
 // devolve o usuário da sessão, nunca um id vindo do client). Esses campos
-// aparecem no rodapé/última página da revista digital personalizada (ver
-// src/components/magazine/magazine-view.tsx e PROJECT.md).
+// aparecem na capa personalizada/última página do PDF da revista digital
+// (ver src/modules/magazine/official-pdf-assembler.ts e PROJECT.md).
 export async function updateProfileAction(input: ProfileInput): Promise<ActionResult> {
   const user = await requireApprovedUser();
 

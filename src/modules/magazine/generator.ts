@@ -315,10 +315,11 @@ export async function buildMagazineSnapshot(): Promise<MagazineSnapshot> {
     });
   }
 
-  // Perfumes sempre por último — a leitura web (MagazineView) tem duas
-  // páginas especiais (tabelas olfativas oficiais) antes do catálogo. O
-  // PDF baixado (Magazine V4) usa esse mesmo enriquecimento por SKU
-  // específico via buildEnrichmentBySku, não esta lista de seções.
+  // Perfumes sempre por último. Esta lista de seções só alimenta
+  // `productSnapshot` (estatísticas do admin — "X seções, Y produtos" em
+  // /admin/revista/[id]) desde que a Magazine V4 virou o único jeito de
+  // exibir a revista (ver PROJECT.md) — o PDF em si usa o enriquecimento
+  // por SKU específico via `buildEnrichmentBySku`, não esta lista.
   if (perfumeProducts.length > 0) {
     const { masculino, feminino, semGenero } = await buildPerfumeSections(perfumeProducts);
     if (masculino.length > 0) sections.push({ key: "perfumes-masculinos", title: "Perfumes Masculinos", products: masculino });

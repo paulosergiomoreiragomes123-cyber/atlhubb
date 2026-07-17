@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/src/lib/prisma";
-import type { ConsultantInfo } from "@/src/components/magazine/magazine-view";
+import type { ConsultantInfo } from "@/src/modules/magazine/consultant-info";
 
 export function getMyProfile(userId: string) {
   return prisma.user.findUnique({

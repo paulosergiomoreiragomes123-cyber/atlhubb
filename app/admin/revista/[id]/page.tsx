@@ -20,8 +20,7 @@ import {
   deleteMagazineIssueAction,
 } from "@/src/modules/magazine/actions";
 import { RenameMagazineForm } from "@/src/components/admin/rename-magazine-form";
-import { MagazineView } from "@/src/components/magazine/magazine-view";
-import { getMyProfile, buildConsultantInfo } from "@/src/modules/profile/queries";
+import { MagazinePdfViewer } from "@/src/components/magazine/magazine-pdf-viewer";
 import { BackLink } from "@/src/components/admin/back-link";
 
 export const metadata: Metadata = { title: "Editar edição — AtlHub" };
@@ -31,16 +30,12 @@ export default async function EditarRevistaPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const admin = await requireAdmin();
+  await requireAdmin();
   const { id } = await params;
 
-  const [issue, profile] = await Promise.all([getMagazineIssue(id), getMyProfile(admin.id)]);
+  const issue = await getMagazineIssue(id);
   if (!issue) notFound();
 
-  // Preview usa os dados reais do próprio admin logado (se ele tiver
-  // preenchido /consultor/perfil) — campos vazios simplesmente somem do
-  // preview, nunca inventados.
-  const previewConsultant = buildConsultantInfo(profile, admin.name);
   const sections = (issue.productSnapshot as { sections?: MagazineSection[] } | null)?.sections ?? [];
   const productCount = sections.reduce((sum, section) => sum + section.products.length, 0);
 
@@ -93,7 +88,7 @@ export default async function EditarRevistaPage({
             </Button>
           </form>
           <Button asChild variant="outline">
-            <Link href={`/api/revista/${issue.id}/pdf`} prefetch={false}>
+            <Link href={`/api/revista/${issue.id}/pdf?download=1`} prefetch={false}>
               <Download className="size-4" />
               Baixar PDF de exemplo
             </Link>
@@ -105,12 +100,13 @@ export default async function EditarRevistaPage({
         <CardHeader>
           <CardTitle className="text-base">Preview</CardTitle>
           <CardDescription>
-            Estrutura exata do que o consultor vê — o rodapé/última página
-            aqui usam seus dados de admin, cada consultor vê os próprios.
+            Exatamente o que o consultor vê em /consultor/revista — o
+            rodapé/última página aqui usam seus dados de admin, cada
+            consultor vê os próprios.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <MagazineView issue={issue} consultant={previewConsultant} />
+          <MagazinePdfViewer src={`/api/revista/${issue.id}/pdf`} />
         </CardContent>
       </Card>
     </div>

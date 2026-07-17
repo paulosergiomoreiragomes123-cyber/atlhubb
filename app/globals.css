@@ -128,29 +128,3 @@
     @apply font-sans;
   }
 }
-
-/* ---------------------------------------------------------------------
- * Revista digital — paleta dedicada (Fase 7, 2026-07-16)
- *
- * Escopada na classe .magazine-theme (usada só por MagazineView/
- * MagazineCoverPreview) — não toca em nenhum token do :root/.dark acima,
- * então nada mais no AtlHub (admin, catálogo, chat) muda. Um catálogo
- * impresso tem identidade visual própria e fixa por design — por isso os
- * tons abaixo NÃO reagem ao dark mode do app (ver .magazine-theme sem
- * seletor .dark), diferente do resto do sistema.
- * --------------------------------------------------------------------- */
-.magazine-theme {
-  --magazine-bg: oklch(0.98 0.014 95);
-  --magazine-surface: oklch(1 0 0);
-  --magazine-primary: oklch(0.32 0.07 155);
-  --magazine-primary-foreground: oklch(0.99 0.01 95);
-  --magazine-accent: oklch(0.74 0.12 85);
-  --magazine-accent-foreground: oklch(0.28 0.05 90);
-  --magazine-text: oklch(0.27 0.03 155);
-  --magazine-muted: oklch(0.52 0.02 150);
-  --magazine-border: oklch(0.89 0.02 100);
-  --magazine-font-display: Georgia, "Times New Roman", serif;
-
-  background: var(--magazine-bg);
-  color: var(--magazine-text);
-}

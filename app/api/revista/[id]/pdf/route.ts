@@ -40,12 +40,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const consultant = buildConsultantInfo(profile, user.name);
 
+  // Sem ?download=1: `inline` — é o que /consultor/revista embute num
+  // <iframe> (ver MagazinePdfViewer). Com ?download=1: `attachment` — é o
+  // link explícito "Baixar PDF", que deve forçar "Salvar como" em vez de
+  // abrir dentro do iframe do próprio navegador.
+  const forceDownload = new URL(request.url).searchParams.get("download") === "1";
+
   try {
     const buffer = await assembleOfficialMagazinePdf({ consultant });
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="revista-${issue.id}.pdf"`,
+        "Content-Disposition": `${forceDownload ? "attachment" : "inline"}; filename="revista-${issue.id}.pdf"`,
       },
     });
   } catch (error) {

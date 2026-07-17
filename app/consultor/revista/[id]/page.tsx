@@ -5,9 +5,8 @@ import { ChevronLeft, Download } from "lucide-react";
 
 import { requireApprovedUser } from "@/src/modules/auth/dal";
 import { getPublishedMagazineIssue } from "@/src/modules/magazine/queries";
-import { getMyProfile, buildConsultantInfo } from "@/src/modules/profile/queries";
 import { ShareButton } from "@/src/components/consultor/share-button";
-import { MagazineView } from "@/src/components/magazine/magazine-view";
+import { MagazinePdfViewer } from "@/src/components/magazine/magazine-pdf-viewer";
 
 export const metadata: Metadata = { title: "Revista digital — AtlHub" };
 
@@ -16,13 +15,11 @@ export default async function LeitorRevistaPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await requireApprovedUser();
+  await requireApprovedUser();
   const { id } = await params;
 
-  const [issue, profile] = await Promise.all([getPublishedMagazineIssue(id), getMyProfile(user.id)]);
+  const issue = await getPublishedMagazineIssue(id);
   if (!issue) notFound();
-
-  const consultant = buildConsultantInfo(profile, user.name);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 pb-10">
@@ -36,7 +33,7 @@ export default async function LeitorRevistaPage({
         </Link>
         <div className="flex items-center gap-2">
           <Link
-            href={`/api/revista/${issue.id}/pdf`}
+            href={`/api/revista/${issue.id}/pdf?download=1`}
             prefetch={false}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
@@ -47,7 +44,7 @@ export default async function LeitorRevistaPage({
         </div>
       </div>
 
-      <MagazineView issue={issue} consultant={consultant} />
+      <MagazinePdfViewer src={`/api/revista/${issue.id}/pdf`} />
     </div>
   );
 }

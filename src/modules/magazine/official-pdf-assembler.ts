@@ -11,7 +11,7 @@ import { getActiveEdition } from "@/src/modules/magazine/editions/registry";
 import { getCoverPdfColor } from "@/src/modules/magazine/cover-colors";
 import { buildWhatsappLink } from "@/src/lib/whatsapp";
 import { formatCents } from "@/src/lib/currency";
-import type { ConsultantInfo } from "@/src/components/magazine/magazine-view";
+import type { ConsultantInfo } from "@/src/modules/magazine/consultant-info";
 
 const DEFAULT_MAGAZINE_MESSAGE = "Olá! Vi sua revista digital e gostaria de saber mais.";
 
