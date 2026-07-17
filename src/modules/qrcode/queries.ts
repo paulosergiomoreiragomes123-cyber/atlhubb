@@ -37,7 +37,6 @@ export function getQrCodeBySlug(slug: string) {
         select: {
           title: true,
           status: true,
-          filterTypes: true,
           productSnapshot: true,
           publishedAt: true,
           createdAt: true,

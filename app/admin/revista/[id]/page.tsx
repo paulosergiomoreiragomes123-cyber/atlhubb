@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/src/modules/auth/dal";
 import { getMagazineIssue } from "@/src/modules/magazine/queries";
-import { MAGAZINE_FILTER_LABELS, MAGAZINE_SORT_LABELS } from "@/src/modules/magazine/schemas";
+import type { MagazineSection } from "@/src/modules/magazine/generator";
 import {
   publishMagazineIssueAction,
   unpublishMagazineIssueAction,
@@ -41,6 +41,8 @@ export default async function EditarRevistaPage({
   // preenchido /consultor/perfil) — campos vazios simplesmente somem do
   // preview, nunca inventados.
   const previewConsultant = buildConsultantInfo(profile, admin.name);
+  const sections = (issue.productSnapshot as { sections?: MagazineSection[] } | null)?.sections ?? [];
+  const productCount = sections.reduce((sum, section) => sum + section.products.length, 0);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
@@ -48,9 +50,9 @@ export default async function EditarRevistaPage({
       <div>
         <h1 className="text-2xl font-semibold">{issue.title}</h1>
         <p className="text-muted-foreground">
-          {issue.status === "PUBLICADA" ? "Publicada" : "Rascunho"} ·{" "}
-          {issue.filterTypes.map((f) => MAGAZINE_FILTER_LABELS[f]).join(", ")} · Ordenado por{" "}
-          {MAGAZINE_SORT_LABELS[issue.sortBy]}
+          {issue.status === "PUBLICADA" ? "Publicada" : "Rascunho"} · {sections.length}{" "}
+          {sections.length === 1 ? "seção" : "seções"} · {productCount}{" "}
+          {productCount === 1 ? "produto" : "produtos"}
         </p>
       </div>
 

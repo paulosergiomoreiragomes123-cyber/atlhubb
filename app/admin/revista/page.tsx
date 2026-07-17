@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/src/modules/auth/dal";
 import { listMagazineIssues } from "@/src/modules/magazine/queries";
 import { GenerateMagazineForm } from "@/src/components/admin/generate-magazine-form";
-import { MAGAZINE_FILTER_LABELS } from "@/src/modules/magazine/schemas";
+import type { MagazineSection } from "@/src/modules/magazine/generator";
 
 export const metadata: Metadata = { title: "Revista digital — AtlHub" };
 
@@ -56,7 +56,6 @@ export default async function RevistaPage() {
         <TableHeader>
           <TableRow>
             <TableHead>Título</TableHead>
-            <TableHead>Filtro</TableHead>
             <TableHead>Produtos</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Publicada em</TableHead>
@@ -64,14 +63,14 @@ export default async function RevistaPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {issues.map((issue) => (
+          {issues.map((issue) => {
+            const sections = (issue.productSnapshot as { sections?: MagazineSection[] } | null)?.sections ?? [];
+            const productCount = sections.reduce((sum, section) => sum + section.products.length, 0);
+            return (
             <TableRow key={issue.id}>
               <TableCell className="font-medium">{issue.title}</TableCell>
               <TableCell className="text-muted-foreground">
-                {issue.filterTypes.map((f) => MAGAZINE_FILTER_LABELS[f]).join(", ")}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {Array.isArray(issue.productSnapshot) ? issue.productSnapshot.length : 0}
+                {productCount}
               </TableCell>
               <TableCell>
                 <Badge variant={issue.status === "PUBLICADA" ? "default" : "secondary"}>
@@ -89,10 +88,11 @@ export default async function RevistaPage() {
                 </Button>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
           {issues.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
+              <TableCell colSpan={5} className="text-center text-muted-foreground">
                 Nenhuma edição ainda.
               </TableCell>
             </TableRow>

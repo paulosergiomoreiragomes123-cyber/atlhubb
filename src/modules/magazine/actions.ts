@@ -17,11 +17,11 @@ import type { Prisma } from "@/src/generated/prisma/client";
 
 export type ActionResult = { message: string } | void;
 
-// Substitui o antigo fluxo de upload manual: monta o snapshot de produtos
-// dos filtros escolhidos (união — ver src/modules/magazine/generator.ts) já
-// ordenado, e cria a edição com ele embutido, em RASCUNHO — o admin revisa
-// o preview antes de publicar. Sem PDF aqui: o PDF é gerado na hora, por
-// consultor, em app/api/revista/[id]/pdf/route.ts — nunca armazenado.
+// Magazine V3: totalmente automático — busca TODOS os produtos ativos,
+// monta as seções por categoria (ver generator.ts), cria a edição em
+// RASCUNHO. Admin só digita o título e revisa o preview antes de publicar.
+// Sem PDF aqui: o PDF é gerado na hora, por consultor, em
+// app/api/revista/[id]/pdf/route.ts — nunca armazenado.
 export async function generateMagazineIssueAction(input: GenerateMagazineInput): Promise<ActionResult> {
   const admin = await requireAdmin();
 
@@ -30,13 +30,12 @@ export async function generateMagazineIssueAction(input: GenerateMagazineInput):
     return { message: "Dados inválidos. Confira os campos." };
   }
 
-  const snapshot = await buildMagazineSnapshot(parsed.data.filterTypes, parsed.data.sortBy);
+  const snapshot = await buildMagazineSnapshot();
+  const productCount = snapshot.sections.reduce((sum, section) => sum + section.products.length, 0);
 
   const issue = await prisma.magazineIssue.create({
     data: {
       title: parsed.data.title,
-      filterTypes: parsed.data.filterTypes,
-      sortBy: parsed.data.sortBy,
       productSnapshot: snapshot as unknown as Prisma.InputJsonValue,
     },
   });
@@ -48,9 +47,8 @@ export async function generateMagazineIssueAction(input: GenerateMagazineInput):
     entityId: issue.id,
     metadata: {
       title: issue.title,
-      filterTypes: issue.filterTypes,
-      sortBy: issue.sortBy,
-      productCount: snapshot.length,
+      sectionCount: snapshot.sections.length,
+      productCount,
     },
   });
 

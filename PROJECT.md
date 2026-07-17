@@ -1,6 +1,6 @@
 # AtlHub — Documento de Arquitetura
 
-> Status: Fases 1–3 implementadas, mais um bloco de plataforma administrativa completa (marcas, fornecedores, galeria de imagens, estoque com histórico, busca avançada, auditoria, dashboard, sidebar) construído antes da Fase 4 a pedido do cliente. **Fase 4 (assistente de IA + ingestão do Guia Oficial)** implementada e testada contra o Supabase real — o Guia 2026 é um PDF escaneado (sem texto extraível); um fallback de OCR (`tesseract.js` + `@napi-rs/canvas`, 2026-07-15, ver seção 9) ingeriu as 204 páginas em 212 chunks reais. Falta só a `AI_GATEWAY_API_KEY` (a ser adicionada no deploy) para o primeiro teste com modelo de verdade e para completar os embeddings pendentes (`npm run ai:reembed`, ver seção 9). **Fase 5 (revista digital, QR Code, compartilhamento)** implementada e testada contra o Supabase real — falta só o `BLOB_READ_WRITE_TOKEN` (idem, no deploy) para o upload real de PDF funcionar; o resto (CRUD, publicação, QR Code, página pública) já funciona hoje via URL manual. **Fase 6A (sincronização com a loja pública `loja.atlanticanatural.com.br`) implementada e testada ao vivo (2026-07-15)** — 298 produtos sincronizados de 21 categorias, rodado duas vezes contra o Supabase real confirmando idempotência (2ª execução: 0 criados, 0 atualizados, 298 sem mudança). Isso supera a decisão de negócio da seção 8/10 (registrada mais cedo no mesmo dia) — o cliente confirmou que a loja pública existe e deve ser sincronizada; ver seção 16. **Fase 7.1 (revista digital personalizada por consultor, estilo Natura/Avon, 2026-07-16)** substituiu a Fase 7 — sem PDF salvo, cada consultor vê/baixa a revista com o próprio contato (WhatsApp/Instagram/foto de `/consultor/perfil`), sem botão "Comprar"; ver seção 19.
+> Status: Fases 1–3 implementadas, mais um bloco de plataforma administrativa completa (marcas, fornecedores, galeria de imagens, estoque com histórico, busca avançada, auditoria, dashboard, sidebar) construído antes da Fase 4 a pedido do cliente. **Fase 4 (assistente de IA + ingestão do Guia Oficial)** implementada e testada contra o Supabase real — o Guia 2026 é um PDF escaneado (sem texto extraível); um fallback de OCR (`tesseract.js` + `@napi-rs/canvas`, 2026-07-15, ver seção 9) ingeriu as 204 páginas em 212 chunks reais. Falta só a `AI_GATEWAY_API_KEY` (a ser adicionada no deploy) para o primeiro teste com modelo de verdade e para completar os embeddings pendentes (`npm run ai:reembed`, ver seção 9). **Fase 5 (revista digital, QR Code, compartilhamento)** implementada e testada contra o Supabase real — falta só o `BLOB_READ_WRITE_TOKEN` (idem, no deploy) para o upload real de PDF funcionar; o resto (CRUD, publicação, QR Code, página pública) já funciona hoje via URL manual. **Fase 6A (sincronização com a loja pública `loja.atlanticanatural.com.br`) implementada e testada ao vivo (2026-07-15)** — 298 produtos sincronizados de 21 categorias, rodado duas vezes contra o Supabase real confirmando idempotência (2ª execução: 0 criados, 0 atualizados, 298 sem mudança). Isso supera a decisão de negócio da seção 8/10 (registrada mais cedo no mesmo dia) — o cliente confirmou que a loja pública existe e deve ser sincronizada; ver seção 16. **Fase 7.1 (revista digital personalizada por consultor, estilo Natura/Avon, 2026-07-16)** substituiu a Fase 7 — sem PDF salvo, cada consultor vê/baixa a revista com o próprio contato (WhatsApp/Instagram/foto de `/consultor/perfil`), sem botão "Comprar"; ver seção 19. **Magazine V3 (2026-07-17)** substituiu por completo a geração/o template da Fase 7.1 — seções por categoria real (cada uma nova página), perfis olfativos de perfume (`PerfumeProfile`, importados uma única vez das tabelas oficiais), preço sempre atual da loja sem inventar desconto; testada ao vivo (260 produtos, 157 páginas de PDF geradas e inspecionadas) e já publicada em produção; ver seção 21.
 > Base técnica atual do repositório: Next.js 16.2.10 (App Router, modelo de Cache Components), React 19, TypeScript, Tailwind CSS v4, Prisma ORM + Supabase Postgres, Auth.js v5, React Hook Form + Zod, shadcn/ui, AI SDK v6 (`ai` + `@ai-sdk/react`) via Vercel AI Gateway, `@vercel/blob` (upload direto do navegador), `qrcode`, `cheerio` (parsing HTML da loja pública, Fase 6A), `@vercel/config` (`vercel.ts`, cron de sincronização), `tesseract.js` + `@napi-rs/canvas` (OCR do Guia Oficial, ver seção 9).
 
 ---
@@ -1180,3 +1180,169 @@ escolhida realmente muda o byte final gerado. Fluxo de login real
 (preencher o formulário no navegador, ver o resultado na revista) continua
 fora do alcance deste ambiente por falta de credenciais — mesma ressalva da
 seção 19.10.
+
+---
+
+## 21. Magazine V3 — revista premium do zero (implementada 2026-07-17)
+
+### 21.1 Por que substituir de novo, e não só ajustar a v2
+
+O cliente pediu explicitamente pra ignorar a Revista Digital v2 (Fases 7/
+7.1/7.2) e construir do zero — cara de catálogo premium (Natura/Boticário/
+Eudora), muito mais conteúdo por página, seções reais por categoria (cada
+uma começando página nova), e um recurso novo pra perfumes: casar cada
+fragrância sincronizada da loja com um perfil olfativo oficial (inspirado
+em, notas, categoria, ocasião). `src/modules/magazine/{generator,schemas,
+actions,pdf-template}.ts` e `src/components/{admin/generate-magazine-form,
+magazine/magazine-view}.tsx` foram reescritos do zero (não adaptados).
+`category-colors.ts`/`guide-excerpt.ts` foram removidos, substituídos por
+`category-themes.ts`/`guide-matching.ts`. O que **não** mudou —
+`src/modules/profile/*`, `cover-colors.ts`, `src/lib/whatsapp.ts`, o
+mecanismo de PDF gerado na hora por consultor — é infraestrutura de
+personalização já validada, não "a revista antiga" que o cliente queria
+substituir.
+
+### 21.2 `PerfumeProfile` — importado uma única vez, nunca por OCR na geração
+
+O cliente enviou dois arquivos reais (`tabela-olfativa-masculina.jpg`,
+`.../feminina.jpg`, hoje em `public/magazine/`, também embutidos como
+páginas inteiras na revista) com as tabelas oficiais da Atlântica Natural.
+Antes de aceitar isso como fonte, uma pesquisa direta no Guia Oficial já
+ingerido (212 chunks) confirmou que **não existe** dado de "inspirado em"/
+notas/família olfativa por fragrância em lugar nenhum do sistema — só uma
+página com uma lista de nomes Feminino/Masculino e um texto de cuidados
+genérico pra linha toda. As duas imagens foram lidas e transcritas
+manualmente (não OCR) pra `scripts/import-perfume-profiles.ts`, rodado uma
+única vez (`npx tsx scripts/import-perfume-profiles.ts`) — populou 21
+perfis masculinos + 27 femininos em `PerfumeProfile`. A partir daí, a
+geração da revista nunca mais toca essas imagens: só consulta a tabela.
+
+Campos `topNotes`/`heartNotes`/`baseNotes` só existem pra `MASCULINO` — a
+tabela feminina não tem essa quebra por fragrância, então ficam `null` pra
+toda entrada `FEMININO` (nunca inventado). `occasion`/`ranking` vêm dos
+rankings reais das duas tabelas ("Mais marcantes para noite"/"Mais frescos
+para o dia"/"Top 9 mais doces"/"Top 5 mais frescos") — só preenchidos
+quando a fragrância realmente aparece num desses rankings.
+
+### 21.3 Casamento produto ↔ perfil — exato, nunca fuzzy
+
+`src/modules/magazine/perfume-matching.ts`: `normalizePerfumeName` remove
+o prefixo "Fragrância"/"Fragráncia" (as duas grafias existem de verdade nos
+produtos sincronizados), o volume, acentos e variantes de apóstrofo
+(reto/curvo/agudo — "521 Sexy's" tinha um apóstrofo diferente entre a
+tabela e o produto sincronizado, só isso já exigiu normalização). Casamento
+é sempre **exato** depois de normalizar os dois lados — nunca
+fuzzy/Levenshtein, pra nunca atribuir o perfil de uma fragrância a outra
+por engano. Testado contra os 96 produtos de perfume reais: 58 fragrâncias
+únicas depois de agrupar variações de volume (15ml/100ml num só card, ver
+21.4), 38 casaram com um gênero oficial (17 masculino + 21 feminino), 20
+ficaram em "Outros Perfumes" (sem perfil — nomes reais que não estão em
+nenhuma das duas tabelas, ex.: variantes "Elixir", "Fortune Gold Elixir",
+ou fragrâncias fora do range coberto pelas tabelas enviadas). Isso é
+esperado e correto: mostrar sem gênero é melhor que adivinhar errado.
+
+### 21.4 Preço 15ml/100ml — agrupamento por fragrância-base
+
+Produtos de perfume sincronizados existem em dois tamanhos (linhas
+separadas na loja). `generator.ts` agrupa pelo nome normalizado e monta um
+único item de catálogo com `volumePrices: { "15ml": ..., "100ml": ... }` —
+só os tamanhos que existem de verdade pra aquela fragrância aparecem (nunca
+um preço inventado pro tamanho que não é vendido).
+
+### 21.5 Preço "De/Por" — arquitetura pronta, nunca inventado
+
+Decisão do cliente (2026-07-16): mostrar só o preço atual por enquanto.
+`generator.ts` já calcula `compareAtPriceCents` a partir do **histórico
+real** de `ProductPrice` (as duas linhas mais recentes por produto) — se a
+mais recente for menor que a anterior, essa anterior vira "De". Hoje é
+sempre `null` porque nenhum produto ainda tem 2+ linhas de preço (só um
+sync completo até agora) — no dia em que a loja realmente baixar um preço
+num sync futuro, "De/Por" aparece sozinho, sem nenhuma mudança de código.
+
+### 21.6 Benefícios/modo de uso/ingredientes — 4 segmentos, com dois filtros de segurança novos
+
+`src/modules/magazine/guide-matching.ts` (sucessor de `guide-excerpt.ts`)
+separa um trecho do Guia em até 4 campos por marcador real ("SOBRE O
+PRODUTO" → descrição, "BENEFÍCIOS" → benefícios, "MODO DE USAR"/"SUGESTÃO
+DE CONSUMO" → modo de uso, "INFORMAÇÃO NUTRICIONAL"/"COMPOSIÇÃO" →
+ingredientes) — cada um só aparece se o próprio texto tiver aquele
+marcador. Dois problemas reais apareceram testando contra o catálogo
+inteiro e foram corrigidos:
+
+- **Ruído de OCR em tabela nutricional**: a seção de ingredientes vem de
+  tabelas de informação nutricional, a pior parte do OCR do Guia (muitas
+  colunas numéricas apertadas) — viravam texto ilegível tipo "1AG 31SC made
+  à G7 ÁEAL...Ao/[IN HR 2 UM". `looksLikeOcrNoise` (contagem de `[`, `]`,
+  `|` — quase nunca aparecem em português real, mas sempre aparecem nesse
+  tipo de ruído) oculta o segmento em vez de mostrar lixo ilegível como se
+  fosse informação real de produto (ainda mais sensível em suplemento/
+  vitamina).
+- **Atribuição errada por nome genérico**: "COMPLEXO B" (produto real)
+  batia por acaso dentro da lista de ingredientes de OUTRO suplemento
+  (Pré-Treino, que menciona "vitaminas do complexo B" de passagem),
+  mostrando a descrição errada. Corrigido exigindo que o nome buscado
+  apareça dentro do próprio segmento de descrição ("SOBRE O PRODUTO..."),
+  não em qualquer lugar do trecho inteiro. **Limitação conhecida e aceita**:
+  isso não resolve 100% dos casos — "Complexo B" também aparece dentro da
+  descrição do ANTIOX (que cita "um mix de vitaminas... do Complexo B" como
+  ingrediente próprio), e uma tentativa de exigir a posição bem no início da
+  descrição (testada) cortou também matches legítimos como "Picolinato de
+  Cromo" (cuja menção real fica mais adiante no parágrafo) — a posição varia
+  demais entre páginas do Guia pra usar como corte rígido. Fixar isso de
+  verdade exigiria entendimento semântico (IA), explicitamente fora de
+  escopo; o residual (nomes de produto que também são termos genéricos de
+  nutriente, ex. "Complexo B") fica como limitação documentada, não
+  resolvida às cegas.
+
+Buscas agora tentam múltiplas variantes por especificidade (nome completo,
+nome sem volume/tamanho) — "Código" como critério de casamento foi
+descartado: confirmado que o Guia nunca menciona SKU/código de produto.
+
+### 21.7 Seções por categoria — só o que é real
+
+Sem filtro escolhido pelo admin: "Gerar Magazine" busca **todos** os
+produtos ativos. Suplementos (`nutraceuticos`) e Cosméticos
+(`cosmetico-ozonizado`) mantêm o agrupamento já aceito na v2; toda outra
+categoria real (Óleos Essenciais, Vitaminas, Academia, Chás, Linha Casa
+Ozônio, Linha Impera, Linha Nema, Maquiagem Ozônio, Material Apoio,
+Serviços, Wave Global) vira sua própria seção com o nome real (limpo de
+espaço duplo/ALL CAPS pra Title Case — cosmético, não muda o dado). Sem
+seção "Kits" inventada: nenhum produto ou categoria real tem esse sinal
+hoje. "Lançamentos" (createdAt < 30 dias) foi **testada e removida**: logo
+depois de uma sincronização em massa, 100% do catálogo tem `createdAt`
+recente — uma seção "Lançamentos" que é o catálogo inteiro não destaca
+nada de verdade (mesmo princípio de nunca fingir "Mais vendidos" sem dado
+real). Um limiar (só aparece se for ≤50% do catálogo) prepara pra quando a
+loja sincronizar produtos de verdade novos aos poucos no futuro.
+"Promoções" só apareceria se a categoria real `promocao` (existe no
+crawler, hoje sem produto) algum dia tiver produto.
+
+### 21.8 Layout — inspirado na Magazine oficial, sem copiar
+
+A Magazine oficial da Atlântica (`magazine-oficial-referencia.pdf`, 55
+páginas — renomeada nesta sessão por um bug de normalização Unicode no
+nome original com "Ç") foi lida e analisada visualmente antes de desenhar
+o layout. Achado importante: as páginas de produto reais são colagens
+artísticas (flatlay com cenário, bottles compostos à mão sobre fotos de
+lifestyle) — isso não é automatizável a partir de fotos de produto simples
+sincronizadas da loja, então a V3 pega a linguagem (tipografia grande e
+confiante, badges de preço, bloco de cor sólida por categoria, bastante
+espaço, 1-2 produtos por página em vez de grade de 9) sem tentar recriar a
+arte por cenário. Duas páginas especiais (as imagens reais das tabelas
+olfativas, exatamente como enviadas) ficam sempre antes do catálogo
+automático de perfumes. QR Code por produto (além do QR de contato do
+rodapé/última página) — mensagem de WhatsApp já cita o produto/perfume.
+
+### 21.9 Verificação
+
+`npx tsc --noEmit`, `npm run lint`, `npm run build` limpos. Testado ao vivo
+contra os 298 produtos reais sincronizados: 16 seções geradas, 260 itens de
+catálogo (202 produtos normais + 58 fragrâncias agrupadas), PDF de 52,8MB/
+157 páginas gerado com sucesso e inspecionado (texto extraído via `unpdf`
+confirma cover/divisórias/CTA/última página; render de página-imagem via
+`renderPageAsImage` confirma visual da capa, divisória de categoria e card
+de produto). Primeira edição real ("Edição de Julho 2026") já criada e
+publicada em produção via o mesmo caminho de código do botão "Gerar
+Magazine" do admin. Fluxo de login real (perfil, download autenticado)
+continua fora do alcance deste ambiente por falta de credenciais — mesma
+ressalva de sempre.

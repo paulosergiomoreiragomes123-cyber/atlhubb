@@ -363,49 +363,19 @@ enum MagazineIssueStatus {
   PUBLICADA
 }
 
-// Fase 7 — gerador automático (2026-07-16): a edição não é mais um PDF
-// colado/upado, é montada a partir do catálogo sincronizado (Fase 6A).
-// `filterType` guarda qual recorte de produtos foi usado; `productSnapshot`
-// congela os produtos NO MOMENTO da geração (mesma filosofia de
-// Conversation.messages — um JSON ponto-no-tempo, não uma tabela relacional
-// nova) — preview e publicação ficam estáveis mesmo que o catálogo mude
-// depois, e a leitura não precisa rejuntar Product toda vez.
-enum MagazineFilterType {
-  TODOS
-  LANCAMENTOS
-  PROMOCOES
-  PERFUMES
-  SUPLEMENTOS
-  COSMETICOS
-}
-
-// Fase 7 v2 (2026-07-16): sem "mais vendidos" de verdade — não existe dado de
-// venda em lugar nenhum do sistema (a Atlântica não processa pedido dentro do
-// AtlHub). MAIS_VENDIDOS cai pro mesmo critério de NOME na prática (ver
-// generator.ts) — a opção existe na UI porque foi pedida, mas nunca finge um
-// número de vendas que não existe.
-enum MagazineSortBy {
-  LANCAMENTOS
-  MAIS_VENDIDOS
-  NOME
-  PRECO
-}
-
-// Sem model MagazinePage de propósito: a revista é renderizada como página
-// HTML responsiva (componente MagazineView, ver PROJECT.md) — o PDF agora é
-// gerado NA HORA, por consultor (rodapé/última página com o contato de quem
-// baixou), não armazenado — por isso não há mais `pdfUrl`/`coverImageUrl`
-// (a capa também virou automática, sem upload manual).
+// Magazine V3 (2026-07-16) — substitui por completo o gerador com filtro/
+// ordenação escolhidos pelo admin (Fase 7/7.1/7.2): "Gerar Magazine" busca
+// TODOS os produtos ativos automaticamente, sem seleção manual nenhuma.
+// `productSnapshot` continua um JSON ponto-no-tempo (mesma filosofia de
+// Conversation.messages) — preview e publicação ficam estáveis mesmo que o
+// catálogo mude depois — só que com um formato novo (seções por categoria,
+// enriquecimento do Guia em até 4 campos, perfis olfativos de perfume).
 model MagazineIssue {
   id     String              @id @default(cuid())
   title  String
   status MagazineIssueStatus @default(RASCUNHO)
   publishedAt DateTime?
 
-  // Era um filtro único — agora uma lista (união/OR entre os marcados no
-  // admin); "Todos" ignora os demais.
-  filterTypes     MagazineFilterType[]
-  sortBy          MagazineSortBy       @default(NOME)
   productSnapshot Json?
 
   qrCodes QrCode[]
@@ -414,6 +384,42 @@ model MagazineIssue {
   updatedAt DateTime @updatedAt
 
   @@map("magazine_issues")
+}
+
+// ---------------------------------------------------------------------------
+// Magazine V3 — perfis olfativos de perfume (2026-07-16)
+// ---------------------------------------------------------------------------
+
+enum PerfumeGender {
+  MASCULINO
+  FEMININO
+}
+
+// Alimentada UMA ÚNICA VEZ por scripts/import-perfume-profiles.ts, a partir
+// das duas tabelas oficiais da Atlântica Natural (tabela-olfativa-masculina/
+// feminina.jpg, ver PROJECT.md) — nunca recalculada por OCR durante a
+// geração da revista. Campos ficam `null` quando a própria tabela de origem
+// não tem aquele dado pra aquela fragrância (nunca inventado) — ex.:
+// topNotes/heartNotes/baseNotes só existem pra MASCULINO, a tabela feminina
+// não tem essa quebra.
+model PerfumeProfile {
+  id                String        @id @default(cuid())
+  name              String
+  gender            PerfumeGender
+  inspiredBy        String?
+  olfactoryCategory String?
+  topNotes          String?
+  heartNotes        String?
+  baseNotes         String?
+  occasion          String?
+  ranking           String?
+  sourceImage       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, gender])
+  @@map("perfume_profiles")
 }
 
 enum QrTargetType {
