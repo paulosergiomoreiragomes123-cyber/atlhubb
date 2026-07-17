@@ -1,22 +1,25 @@
 import fs from "node:fs";
-import { renderPageAsImage } from "unpdf";
+import { renderPageAsImage, getDocumentProxy } from "unpdf";
 import { createWorker } from "tesseract.js";
 
-// Ferramenta de apoio pro mapeamento manual único (ver
-// src/modules/magazine/official-edition-mapping.ts) — roda OCR numa
-// página da revista oficial, acha candidatos a preço com bounding box, e
-// salva a imagem renderizada pra eu conferir visualmente qual produto
-// cada preço pertence. Não faz parte do app — é só uma ferramenta de
-// autoria, usada uma vez por página.
+// Ferramenta de apoio pro mapeamento manual único de uma edição (ver
+// src/modules/magazine/editions/) — roda OCR numa página da revista
+// oficial, acha candidatos a preço com bounding box, e salva a imagem
+// renderizada pra eu conferir visualmente qual produto cada preço
+// pertence. Não faz parte do app — é só uma ferramenta de autoria, usada
+// uma vez por página, por edição.
+//
+// Uso: npx tsx scripts/ocr-page-prices.ts <pdfPath> <pageNumber> <outDir>
 
 const PRICE_PATTERN = /\d{1,3}[,.]\d{2}/;
 
 async function main() {
-  const pageNumber = Number(process.argv[2]);
-  const outDir = process.argv[3];
+  const pdfPath = process.argv[2];
+  const pageNumber = Number(process.argv[3]);
+  const outDir = process.argv[4];
   const scale = 2;
 
-  const buffer = fs.readFileSync("public/magazine/magazine-oficial-referencia.pdf");
+  const buffer = fs.readFileSync(pdfPath);
   const image = await renderPageAsImage(new Uint8Array(buffer), pageNumber, {
     canvasImport: () => import("@napi-rs/canvas"),
     scale,
@@ -27,8 +30,6 @@ async function main() {
   const result = await worker.recognize(Buffer.from(image), {}, { blocks: true });
   await worker.terminate();
 
-  // Precisamos das dimensões da imagem renderizada pra normalizar em fração.
-  const { getDocumentProxy } = await import("unpdf");
   const pdf = await getDocumentProxy(new Uint8Array(buffer));
   const page = await pdf.getPage(pageNumber);
   const viewport = page.getViewport({ scale });

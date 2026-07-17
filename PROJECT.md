@@ -1,6 +1,6 @@
 # AtlHub — Documento de Arquitetura
 
-> Status: Fases 1–3 implementadas, mais um bloco de plataforma administrativa completa (marcas, fornecedores, galeria de imagens, estoque com histórico, busca avançada, auditoria, dashboard, sidebar) construído antes da Fase 4 a pedido do cliente. **Fase 4 (assistente de IA + ingestão do Guia Oficial)** implementada e testada contra o Supabase real — o Guia 2026 é um PDF escaneado (sem texto extraível); um fallback de OCR (`tesseract.js` + `@napi-rs/canvas`, 2026-07-15, ver seção 9) ingeriu as 204 páginas em 212 chunks reais. Falta só a `AI_GATEWAY_API_KEY` (a ser adicionada no deploy) para o primeiro teste com modelo de verdade e para completar os embeddings pendentes (`npm run ai:reembed`, ver seção 9). **Fase 5 (revista digital, QR Code, compartilhamento)** implementada e testada contra o Supabase real — falta só o `BLOB_READ_WRITE_TOKEN` (idem, no deploy) para o upload real de PDF funcionar; o resto (CRUD, publicação, QR Code, página pública) já funciona hoje via URL manual. **Fase 6A (sincronização com a loja pública `loja.atlanticanatural.com.br`) implementada e testada ao vivo (2026-07-15)** — 298 produtos sincronizados de 21 categorias, rodado duas vezes contra o Supabase real confirmando idempotência (2ª execução: 0 criados, 0 atualizados, 298 sem mudança). Isso supera a decisão de negócio da seção 8/10 (registrada mais cedo no mesmo dia) — o cliente confirmou que a loja pública existe e deve ser sincronizada; ver seção 16. **Fase 7.1 (revista digital personalizada por consultor, estilo Natura/Avon, 2026-07-16)** substituiu a Fase 7 — sem PDF salvo, cada consultor vê/baixa a revista com o próprio contato (WhatsApp/Instagram/foto de `/consultor/perfil`), sem botão "Comprar"; ver seção 19. **Magazine V3 (2026-07-17)** substituiu por completo a geração/o template da Fase 7.1 — seções por categoria real (cada uma nova página), perfis olfativos de perfume (`PerfumeProfile`, importados uma única vez das tabelas oficiais), preço sempre atual da loja sem inventar desconto; testada ao vivo (260 produtos, 157 páginas de PDF geradas e inspecionadas) e já publicada em produção; ver seção 21.
+> Status: Fases 1–3 implementadas, mais um bloco de plataforma administrativa completa (marcas, fornecedores, galeria de imagens, estoque com histórico, busca avançada, auditoria, dashboard, sidebar) construído antes da Fase 4 a pedido do cliente. **Fase 4 (assistente de IA + ingestão do Guia Oficial)** implementada e testada contra o Supabase real — o Guia 2026 é um PDF escaneado (sem texto extraível); um fallback de OCR (`tesseract.js` + `@napi-rs/canvas`, 2026-07-15, ver seção 9) ingeriu as 204 páginas em 212 chunks reais. Falta só a `AI_GATEWAY_API_KEY` (a ser adicionada no deploy) para o primeiro teste com modelo de verdade e para completar os embeddings pendentes (`npm run ai:reembed`, ver seção 9). **Fase 5 (revista digital, QR Code, compartilhamento)** implementada e testada contra o Supabase real — falta só o `BLOB_READ_WRITE_TOKEN` (idem, no deploy) para o upload real de PDF funcionar; o resto (CRUD, publicação, QR Code, página pública) já funciona hoje via URL manual. **Fase 6A (sincronização com a loja pública `loja.atlanticanatural.com.br`) implementada e testada ao vivo (2026-07-15)** — 298 produtos sincronizados de 21 categorias, rodado duas vezes contra o Supabase real confirmando idempotência (2ª execução: 0 criados, 0 atualizados, 298 sem mudança). Isso supera a decisão de negócio da seção 8/10 (registrada mais cedo no mesmo dia) — o cliente confirmou que a loja pública existe e deve ser sincronizada; ver seção 16. **Fase 7.1 (revista digital personalizada por consultor, estilo Natura/Avon, 2026-07-16)** substituiu a Fase 7 — sem PDF salvo, cada consultor vê/baixa a revista com o próprio contato (WhatsApp/Instagram/foto de `/consultor/perfil`), sem botão "Comprar"; ver seção 19. **Magazine V3 (2026-07-17)** substituiu por completo a geração/o template da Fase 7.1 — seções por categoria real (cada uma nova página), perfis olfativos de perfume (`PerfumeProfile`, importados uma única vez das tabelas oficiais), preço sempre atual da loja sem inventar desconto; testada ao vivo (260 produtos, 157 páginas de PDF geradas e inspecionadas) e já publicada em produção; ver seção 21. **Magazine V4 (2026-07-17) implementada e testada ao vivo** — o PDF baixado por consultor reaproveita byte a byte a revista oficial impressa "ED 17 Março 26" (55 páginas) em vez de recriar o layout do zero; mapeamento manual completo das 52 páginas de conteúdo (3–54, feito por seção contra o catálogo real), preço sempre atualizado sobreposto na posição impressa, página de detalhe nova logo após cada produto (Para que serve/Benefícios/Como usar, ou pros perfumes Inspirado em/família olfativa/notas/fixação/ocasião), tabelas olfativas oficiais inseridas após a seção de Fragrâncias, capa/contracapa personalizadas por consultor (foto, WhatsApp, Instagram, QR Code, mensagem). A versão **web** (`/consultor/revista`) continua sendo o catálogo Magazine V3 (dados sempre vivos) — só o PDF baixado usa a revista oficial; ver seção 22.
 > Base técnica atual do repositório: Next.js 16.2.10 (App Router, modelo de Cache Components), React 19, TypeScript, Tailwind CSS v4, Prisma ORM + Supabase Postgres, Auth.js v5, React Hook Form + Zod, shadcn/ui, AI SDK v6 (`ai` + `@ai-sdk/react`) via Vercel AI Gateway, `@vercel/blob` (upload direto do navegador), `qrcode`, `cheerio` (parsing HTML da loja pública, Fase 6A), `@vercel/config` (`vercel.ts`, cron de sincronização), `tesseract.js` + `@napi-rs/canvas` (OCR do Guia Oficial, ver seção 9).
 
 ---
@@ -1349,7 +1349,7 @@ ressalva de sempre.
 
 ---
 
-## 22. Magazine V4 — PDF reaproveita a revista oficial impressa byte a byte (em andamento, 2026-07-17)
+## 22. Magazine V4 — PDF reaproveita a revista oficial impressa byte a byte (implementada, 2026-07-17)
 
 ### 22.1 Mudança de estratégia
 
@@ -1428,33 +1428,80 @@ Dois bugs adicionais, ambos corrigidos:
 
 ### 22.4 Arquitetura final
 
-`src/modules/magazine/official-edition-mapping.ts` — mapeamento manual
-único (`página → [{ sku, priceBox }]`, fração 0-1 da página, indefinição de
-escala). `src/modules/magazine/official-pdf-assembler.ts`
-(`assembleOfficialMagazinePdf`) monta, nesta ordem: página de abertura
-personalizada nova (antes da capa, já que a capa oficial não tem área
-reservada pra sobrepor sem alterar a identidade visual) → capa oficial
-intacta (cópia direta) → índice oficial intacto → pra cada página de
-conteúdo (3 a 54): se tem produto mapeado, sobrepõe preço(s) + insere
-página(s) de detalhe logo depois; sem nada mapeado, cópia direta (evita
-reamostrar como imagem à toa, preserva qualidade); logo após a página de
-Fragrâncias (absoluta 47), as duas imagens reais das tabelas olfativas →
-contracapa oficial com overlay só na caixa branca já reservada na própria
-arte (foto circular, nome, cargo, cidade, WhatsApp, Instagram, mensagem
-personalizada, QR Code). `generator.ts` ganhou `buildEnrichmentBySku` —
-busca só os SKUs específicos de uma página (não o catálogo inteiro),
-reaproveitando 100% do enriquecimento já existente (Guia, `PerfumeProfile`).
+`src/modules/magazine/editions/` — uma edição = um PDF real da revista
+impressa + o mapeamento manual único feito uma vez pra ela. Começou como
+um único arquivo (`official-edition-mapping.ts`) e foi refatorado pra um
+diretório (`types.ts` define `OfficialEditionDefinition`/
+`OfficialProductMapping`; `2026-03.ts` é a edição "ED 17 Março 26";
+`registry.ts` exporta `OFFICIAL_EDITIONS` e `getActiveEdition()`, que
+escolhe sempre a mais recente por `publishedAt`) — pra quando a Atlântica
+publicar uma edição nova, o processo vira "adicionar um arquivo", sem
+mexer no assembler. Mapeamento é `página → [{ sku, priceBox }]`, fração
+0-1 da página (indefinição de escala). `src/modules/magazine/
+official-pdf-assembler.ts` (`assembleOfficialMagazinePdf`) monta, nesta
+ordem: página de abertura personalizada nova (antes da capa, já que a capa
+oficial não tem área reservada pra sobrepor sem alterar a identidade
+visual) → capa oficial intacta (cópia direta) → índice oficial intacto →
+pra cada página de conteúdo (3 a 54): se tem produto mapeado, sobrepõe
+preço(s) + insere página(s) de detalhe logo depois; sem nada mapeado,
+cópia direta (evita reamostrar como imagem à toa, preserva qualidade);
+logo após a página de Fragrâncias (absoluta 47), as duas imagens reais das
+tabelas olfativas → contracapa oficial com overlay só na caixa branca já
+reservada na própria arte (foto circular, nome, cargo, cidade, WhatsApp,
+Instagram, mensagem personalizada, QR Code). `generator.ts` ganhou
+`buildEnrichmentBySku` — busca só os SKUs específicos de uma página (não o
+catálogo inteiro), reaproveitando 100% do enriquecimento já existente
+(Guia, `PerfumeProfile`).
 
-### 22.5 Status do mapeamento (grande, feito em etapas)
+### 22.5 Status do mapeamento — completo (52/52 páginas de conteúdo)
 
-Mecanismo completo validado de ponta a ponta (PDF de teste real gerado e
-inspecionado visualmente: capa nova, preço substituído sem fantasma/
-desalinhamento, contracapa com overlay limpo). Mapeada até agora: seção
-**Ozonizados** (página 3, 4 de 12 produtos com correspondência real).
-Faltam ~14 seções/51 páginas (Suplementos, Linha Capilar, Desempenho,
+Todas as páginas de conteúdo da edição 2026-03 (3 a 54: Ozonizados,
+Suplementos e Nutracêuticos, Linha Capilar, Alta Performance/Desempenho,
 Emagrecimento, Linha Casa, Linha Academia, Imunidade, Linha Dermo,
-Qualidade de Vida, Fragrâncias, Material de Apoio, Linha Nemawashi, Óleos
-Essenciais, Longevidade) — cada uma exige a mesma conferência visual
-produto-a-produto contra o catálogo real. Enquanto uma página não é
-mapeada, ela aparece intacta (cópia direta, sem preço desatualizado
-"escondido" nem erro) — comportamento correto, não um bug pendente.
+Qualidade de Vida, Fragrâncias, Material de Apoio, Linha Nemawashi/Profit,
+Óleos Essenciais, Longevidade) foram conferidas produto-a-produto contra o
+catálogo sincronizado real e mapeadas em `editions/2026-03.ts` — 159
+correspondências de SKU no total. Cada página documenta em comentário
+quais produtos retratados **não** têm correspondência hoje (linha
+descontinuada, formato diferente, nome genérico demais pra atribuir com
+segurança) — essas ficam de fora deliberadamente, nunca um SKU chutado só
+pra preencher. Página sem nenhum produto mapeado (ex.: página 6, Gel de
+Massagem; página 18, Mind Expert; página 42, Linha Colágeno) aparece
+intacta (cópia direta, sem preço desatualizado "escondido").
+
+### 22.6 Verificação final — PDF completo gerado e inspecionado
+
+PDF de teste real gerado ponta a ponta pelo caminho de produção
+(`assembleOfficialMagazinePdf`, mesma função usada por `/api/revista/
+[id]/pdf`), contra o catálogo sincronizado real: **106 páginas** (55
+originais + páginas de detalhe inseridas + abertura personalizada +
+tabelas olfativas). Inspecionado visualmente (render página-a-página via
+`renderPageAsImage`/`unpdf`, mesma técnica do assembler): capa/índice/
+colagens de produto intactos, preço sobreposto sem fantasma nem
+desalinhamento, contracapa com foto/QR/contato dentro da caixa reservada,
+páginas de detalhe com os campos corretos (produto normal vs. perfume) e
+com "sem dado" tratado graciosamente (nome aparece, campos vazios somem).
+
+Dois problemas reais achados nessa verificação final e corrigidos:
+
+- **PDF de 167MB/106 páginas com `embedPng`**: cada página com overlay é
+  renderizada como imagem inteira (ver 22.3) e `canvas.toBuffer("image/
+  png")` gera PNG sem perdas — inviável pra um consultor baixar no
+  celular. Trocado por `canvas.toBuffer("image/jpeg", 88)` +
+  `doc.embedJpg` (as páginas são fotos de revista, sem transparência
+  nenhuma — JPEG é visualmente idêntico aqui). Resultado: **20,9MB**, uma
+  redução de ~87%, na mesma faixa do PDF gerado do zero pela V3 (52,8MB).
+- **"R$" duplicado na página 52 (Óleos Essenciais)**: 4 das 7 caixas de
+  preço da página cobriam só o número (bounding box do OCR pro token
+  numérico, sem incluir o token "R$" separado à esquerda), deixando o "R$"
+  antigo visível ao lado do preço novo — "R$ R$142,98". O mesmo tipo de
+  caixa já havia sido alargada em outras páginas de item único (Curcu+Mais,
+  Vital Life, ATLVision, Life Control, página 53) mas foi esquecida
+  nesta página de 7 itens lado a lado; corrigido alargando as 7 caixas
+  pra a esquerda (mesmo padrão), sem invadir o preço do produto vizinho —
+  reconferido visualmente após o ajuste.
+
+Fluxo de login real (perfil, download autenticado) continua fora do
+alcance deste ambiente por falta de credenciais — mesma ressalva de
+sempre; a rota de produção (`/api/revista/[id]/pdf`) foi lida e conferida
+por inspeção de código, não exercitada via navegador logado.

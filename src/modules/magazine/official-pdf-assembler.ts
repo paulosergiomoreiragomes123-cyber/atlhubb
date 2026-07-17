@@ -7,14 +7,7 @@ import { createCanvas, loadImage, type Canvas, type SKRSContext2D } from "@napi-
 import { PDFDocument, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 
 import { buildEnrichmentBySku, type ProductSnapshotItem } from "@/src/modules/magazine/generator";
-import {
-  OFFICIAL_EDITION_MAPPING,
-  OFFICIAL_COVER_PAGE,
-  OFFICIAL_INDEX_PAGE,
-  OFFICIAL_BACK_COVER_PAGE,
-  OFFICIAL_FRAGRANCE_PAGE,
-  OFFICIAL_CONTENT_PAGE_RANGE,
-} from "@/src/modules/magazine/official-edition-mapping";
+import { getActiveEdition } from "@/src/modules/magazine/editions/registry";
 import { getCoverPdfColor } from "@/src/modules/magazine/cover-colors";
 import { buildWhatsappLink } from "@/src/lib/whatsapp";
 import { formatCents } from "@/src/lib/currency";
@@ -94,14 +87,21 @@ async function renderOfficialPageCanvas(
   return { canvas, ctx, width: img.width, height: img.height };
 }
 
+// JPEG, não PNG: cada página aqui é uma foto de página inteira (sem
+// transparência), e o PDF final soma mais de 50 páginas nesse formato — PNG
+// sem perdas testado ao vivo gerou um PDF de 167MB/106 páginas, inviável pra
+// baixar no celular do consultor. JPEG qualidade 88 é visualmente
+// indistinguível em página de revista e reduz o arquivo em ~85%.
+const PAGE_IMAGE_QUALITY = 88;
+
 async function embedCanvasAsPage(
   doc: PDFDocument,
   canvas: Canvas,
   pdfWidth: number,
   pdfHeight: number
 ): Promise<PDFPage> {
-  const buffer = canvas.toBuffer("image/png");
-  const image = await doc.embedPng(buffer);
+  const buffer = canvas.toBuffer("image/jpeg", PAGE_IMAGE_QUALITY);
+  const image = await doc.embedJpg(buffer);
   const page = doc.addPage([pdfWidth, pdfHeight]);
   page.drawImage(image, { x: 0, y: 0, width: pdfWidth, height: pdfHeight });
   return page;
@@ -431,14 +431,15 @@ async function addFullPageImage(doc: PDFDocument, relativePath: string, pageWidt
 // abertura nova (antes da capa) e um overlay na caixa já reservada na
 // contracapa.
 export async function assembleOfficialMagazinePdf({ consultant }: { consultant: ConsultantInfo }): Promise<Buffer> {
-  const sourceBuffer = await readPublicFile("magazine/magazine-oficial-referencia.pdf");
+  const edition = getActiveEdition();
+  const sourceBuffer = await readPublicFile(edition.pdfPath);
   const sourceDoc = await PDFDocument.load(sourceBuffer);
   const outputDoc = await PDFDocument.create();
 
   const font = await outputDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await outputDoc.embedFont(StandardFonts.HelveticaBold);
 
-  const { width: pageWidth, height: pageHeight } = sourceDoc.getPage(OFFICIAL_COVER_PAGE - 1).getSize();
+  const { width: pageWidth, height: pageHeight } = sourceDoc.getPage(edition.coverPage - 1).getSize();
 
   const whatsappLink = buildWhatsappLink(consultant.whatsapp, consultant.magazineMessage || DEFAULT_MAGAZINE_MESSAGE);
   const qrDataUrl = whatsappLink && consultant.showQrCode ? await QRCode.toDataURL(whatsappLink, { width: 400, margin: 1 }) : null;
@@ -450,17 +451,17 @@ export async function assembleOfficialMagazinePdf({ consultant }: { consultant: 
   await embedCanvasAsPage(outputDoc, openingCanvas, pageWidth, pageHeight);
 
   // 2. Capa e índice oficiais — cópia direta, sem nenhuma alteração.
-  const [coverPage] = await outputDoc.copyPages(sourceDoc, [OFFICIAL_COVER_PAGE - 1]);
+  const [coverPage] = await outputDoc.copyPages(sourceDoc, [edition.coverPage - 1]);
   outputDoc.addPage(coverPage);
-  const [indexPage] = await outputDoc.copyPages(sourceDoc, [OFFICIAL_INDEX_PAGE - 1]);
+  const [indexPage] = await outputDoc.copyPages(sourceDoc, [edition.indexPage - 1]);
   outputDoc.addPage(indexPage);
 
   // 3. Busca o enriquecimento de todos os SKUs mapeados de uma vez.
-  const allSkus = Object.values(OFFICIAL_EDITION_MAPPING).flatMap((entries) => entries.map((e) => e.sku));
+  const allSkus = Object.values(edition.mapping).flatMap((entries) => entries.map((e) => e.sku));
   const enrichmentBySku = await buildEnrichmentBySku(allSkus);
 
-  for (let pageNum = OFFICIAL_CONTENT_PAGE_RANGE.start; pageNum <= OFFICIAL_CONTENT_PAGE_RANGE.end; pageNum++) {
-    const mapping = OFFICIAL_EDITION_MAPPING[pageNum] ?? [];
+  for (let pageNum = edition.contentPageRange.start; pageNum <= edition.contentPageRange.end; pageNum++) {
+    const mapping = edition.mapping[pageNum] ?? [];
     const mappedItems = mapping
       .map((entry) => ({ entry, item: enrichmentBySku.get(entry.sku) }))
       .filter((x): x is { entry: (typeof mapping)[number]; item: ProductSnapshotItem } => !!x.item);
@@ -479,7 +480,7 @@ export async function assembleOfficialMagazinePdf({ consultant }: { consultant: 
       drawDetailPages(outputDoc, mappedItems.map((x) => x.item), { pageWidth, pageHeight, font, fontBold });
     }
 
-    if (pageNum === OFFICIAL_FRAGRANCE_PAGE) {
+    if (pageNum === edition.fragrancePage) {
       await addFullPageImage(outputDoc, "magazine/tabela-olfativa-masculina.jpg", pageWidth, pageHeight);
       await addFullPageImage(outputDoc, "magazine/tabela-olfativa-feminina.jpg", pageWidth, pageHeight);
     }
@@ -488,7 +489,7 @@ export async function assembleOfficialMagazinePdf({ consultant }: { consultant: 
   // 4. Contracapa oficial — overlay só na caixa já reservada na arte.
   const { canvas: backCoverCanvas, ctx: backCoverCtx, width: backW, height: backH } = await renderOfficialPageCanvas(
     sourceBuffer,
-    OFFICIAL_BACK_COVER_PAGE
+    edition.backCoverPage
   );
   await drawBackCoverOverlayOnCanvas(backCoverCtx, backW, backH, consultant, qrBuffer);
   await embedCanvasAsPage(outputDoc, backCoverCanvas, pageWidth, pageHeight);
