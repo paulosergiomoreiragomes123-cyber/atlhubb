@@ -2,18 +2,15 @@ import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/src/modules/auth/dal";
 import { prisma } from "@/src/lib/prisma";
-import { renderMagazinePdf } from "@/src/modules/magazine/pdf-template";
+import { assembleOfficialMagazinePdf } from "@/src/modules/magazine/official-pdf-assembler";
 import { getMyProfile, buildConsultantInfo } from "@/src/modules/profile/queries";
-import type { MagazineSection } from "@/src/modules/magazine/generator";
 
-// PDF gerado NA HORA, por consultor — nunca armazenado (ver PROJECT.md).
-// Rodapé/última página usam o perfil de quem está baixando AGORA, não um
-// dado fixo da edição — por isso isso é um Route Handler (streaming de
-// binário) e não uma Server Action. O snapshot já vem pronto do banco (o
-// casamento com o Guia acontece na geração, não aqui) — o trabalho real
-// desta rota é buscar ~260 fotos remotas e gerar um QR Code por produto,
-// por isso um teto maior que o padrão de 60s (Magazine V3 tem bem mais
-// produtos/páginas que a v2).
+// PDF gerado NA HORA, por consultor — nunca armazenado (ver PROJECT.md,
+// Magazine V4). Reaproveita byte a byte as páginas da revista oficial
+// impressa (capa/colagens/contracapa intactas), só sobrepõe preço atual +
+// insere páginas de detalhe/tabelas olfativas — por isso é um Route
+// Handler (streaming de binário) e não uma Server Action. Rodapé/capa/
+// contracapa usam o perfil de quem está baixando AGORA, não um dado fixo.
 export const maxDuration = 120;
 
 // Não usa requireApprovedUser() (que faz redirect(), pensado pra páginas) —
@@ -42,10 +39,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   const consultant = buildConsultantInfo(profile, user.name);
-  const sections = (issue.productSnapshot as { sections?: MagazineSection[] } | null)?.sections ?? [];
 
   try {
-    const buffer = await renderMagazinePdf({ title: issue.title, sections, consultant });
+    const buffer = await assembleOfficialMagazinePdf({ consultant });
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",

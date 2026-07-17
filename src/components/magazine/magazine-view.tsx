@@ -49,14 +49,14 @@ function isPerfumeSectionKey(key: string): boolean {
   return key.startsWith("perfumes");
 }
 
-// Componente único reaproveitado em quatro lugares: preview do admin
-// (/admin/revista/[id]), leitor do consultor (/consultor/revista[/[id]]), a
-// página pública de QR Code (/c/[slug]) e o gerador de PDF sob demanda
-// (pdf-template.tsx segue exatamente a mesma estrutura de conteúdo, mas é
-// um template separado — react-pdf não renderiza JSX de DOM). `consultant`
-// é sempre de quem está vendo/baixando NA HORA — é isso que torna a
-// revista pessoal por consultor, sem gerar uma edição por pessoa (ver
-// PROJECT.md, Magazine V3).
+// Componente único reaproveitado em três lugares: preview do admin
+// (/admin/revista/[id]), leitor do consultor (/consultor/revista[/[id]]) e
+// a página pública de QR Code (/c/[slug]) — sempre a versão web/catálogo
+// (Magazine V3). O PDF baixado (Magazine V4, ver PROJECT.md) reaproveita as
+// páginas da revista oficial impressa em vez desta view — não usa este
+// componente (ver src/modules/magazine/official-pdf-assembler.ts).
+// `consultant` é sempre de quem está vendo/baixando NA HORA — é isso que
+// torna a revista pessoal por consultor, sem gerar uma edição por pessoa.
 export async function MagazineView({
   issue,
   consultant,

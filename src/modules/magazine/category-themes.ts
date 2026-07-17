@@ -1,5 +1,5 @@
 // Sem "server-only" de propósito — usado tanto por MagazineView (Server
-// Component) quanto por pdf-template.tsx, que pode rodar fora do bundler
+// Component) quanto por official-pdf-assembler.ts, que pode rodar fora do bundler
 // do Next. Sucessor de category-colors.ts (Fase 7): a Magazine V3 usa cor
 // cheia nas divisórias de categoria (uma página só, por seção — pedido
 // explícito), não só um badge pastel — por isso a paleta agora tem duas

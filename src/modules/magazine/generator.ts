@@ -234,6 +234,33 @@ async function buildPerfumeSections(
   };
 }
 
+// Usado pela Magazine V4 (revista oficial reaproveitada, ver
+// official-pdf-assembler.ts): busca só os SKUs específicos mapeados numa
+// página da edição impressa (não o catálogo inteiro) e devolve o mesmo
+// enriquecimento (preço atual, Guia, perfil de perfume) indexado por SKU.
+export async function buildEnrichmentBySku(skus: string[]): Promise<Map<string, ProductSnapshotItem>> {
+  if (skus.length === 0) return new Map();
+
+  const products = await prisma.product.findMany({ where: { sku: { in: skus } }, include: productListInclude });
+  const perfumeProducts = products.filter((p) => p.category?.slug === PERFUME_CATEGORY_SLUG);
+  const regularProducts = products.filter((p) => p.category?.slug !== PERFUME_CATEGORY_SLUG);
+
+  const result = new Map<string, ProductSnapshotItem>();
+
+  for (const product of regularProducts) {
+    result.set(product.sku, await buildRegularSnapshotItem(product));
+  }
+
+  if (perfumeProducts.length > 0) {
+    const { masculino, feminino, semGenero } = await buildPerfumeSections(perfumeProducts);
+    for (const item of [...masculino, ...feminino, ...semGenero]) {
+      result.set(item.sku, item);
+    }
+  }
+
+  return result;
+}
+
 export async function buildMagazineSnapshot(): Promise<MagazineSnapshot> {
   const allProducts = await fetchActiveProducts();
 
@@ -288,9 +315,10 @@ export async function buildMagazineSnapshot(): Promise<MagazineSnapshot> {
     });
   }
 
-  // Perfumes sempre por último — a leitura tem duas páginas especiais
-  // (tabelas olfativas oficiais) antes do catálogo, ver MagazineView/
-  // pdf-template.tsx.
+  // Perfumes sempre por último — a leitura web (MagazineView) tem duas
+  // páginas especiais (tabelas olfativas oficiais) antes do catálogo. O
+  // PDF baixado (Magazine V4) usa esse mesmo enriquecimento por SKU
+  // específico via buildEnrichmentBySku, não esta lista de seções.
   if (perfumeProducts.length > 0) {
     const { masculino, feminino, semGenero } = await buildPerfumeSections(perfumeProducts);
     if (masculino.length > 0) sections.push({ key: "perfumes-masculinos", title: "Perfumes Masculinos", products: masculino });

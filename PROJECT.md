@@ -1346,3 +1346,115 @@ publicada em produção via o mesmo caminho de código do botão "Gerar
 Magazine" do admin. Fluxo de login real (perfil, download autenticado)
 continua fora do alcance deste ambiente por falta de credenciais — mesma
 ressalva de sempre.
+
+---
+
+## 22. Magazine V4 — PDF reaproveita a revista oficial impressa byte a byte (em andamento, 2026-07-17)
+
+### 22.1 Mudança de estratégia
+
+O cliente pediu pra parar de recriar a revista do zero (Magazine V3) e usar
+`magazine-oficial-referencia.pdf` (55 páginas, edição real impressa "ED 17
+Março 26") como base — preservando ao máximo layout/cores/tipografia,
+substituindo automaticamente só o preço (no lugar, sobre a arte) e
+acrescentando, logo depois de cada página de produto, uma seção nova com
+Para que serve/Principais benefícios/Como usar (e pra perfume: Inspirado
+em/família olfativa/notas/fixação/ocasião). A versão **web** (`/consultor/
+revista`, `MagazineView`) continua sendo o catálogo Magazine V3 (dados
+sempre vivos) — só o **PDF baixado** passou a reaproveitar a revista
+oficial. É uma divergência consciente entre as duas leituras, documentada
+aqui pra não confundir manutenção futura.
+
+### 22.2 Achado técnico decisivo: o PDF oficial não tem nenhum texto real
+
+Antes de escrever qualquer código, extraí o texto de **todas as 55
+páginas** via `pdf.js getTextContent()` — **0 itens de texto no documento
+inteiro**. Cada página é uma imagem 100% achatada; não existe metadado de
+produto/preço/SKU em lugar nenhum. Isso define a arquitetura inteira:
+
+- **Não dá pra substituir o preço "no código-fonte"** — só cobrindo o
+  preço antigo (pixel) com uma caixa branca + preço novo, na posição certa.
+- A posição de cada preço foi achada com **OCR** (`tesseract.js`, já
+  dependência do projeto — mesmo motor do Guia Oficial), pedindo a saída
+  com bounding box por palavra (`recognize(image, {}, { blocks: true })` —
+  por padrão o tesseract.js não devolve isso). Rodado **uma única vez** por
+  página, ao montar o mapeamento (`scripts/ocr-page-prices.ts`, ferramenta
+  de apoio, não roda em produção) — nunca reprocessado na geração da
+  revista.
+- Qual **SKU real** cada garrafa retrata é conferido à mão (nome do
+  produto, não os códigos impressos na revista — testado, esses códigos
+  **não são** o `storeProductId`, são uma numeração interna do impresso sem
+  relação com o catálogo sincronizado).
+- A edição impressa é **fixa** (março/2026) — o catálogo sincronizado
+  evolui. Testado ao vivo na seção "Ozonizados" (página 3): só 4 dos 12
+  produtos retratados existem no catálogo de hoje (a linha de óleos
+  "NatuOz"/óleo de girassol foi descontinuada) — os outros 8 simplesmente
+  não recebem preço atualizado nem página de detalhe (nunca inventa um SKU
+  só pra preencher).
+
+### 22.3 Bug real de z-order descoberto e corrigido (importante pra manutenção futura)
+
+A primeira tentativa desenhou a sobreposição direto numa página copiada do
+PDF original (`pdf-lib`: `copyPages` + `page.drawRectangle`/`drawText`).
+Testado ao vivo: o conteúdo novo aparecia **atrás** do original em alguns
+casos — dumping o content stream real do PDF gerado confirmou que os
+operadores estavam na ordem certa no arquivo (`q → conteúdo original → Q →
+conteúdo novo`), então não era bug do pdf-lib nem do arquivo gerado, e sim
+um problema de interoperabilidade de alguns leitores de PDF (confirmado
+com `pdf.js`) com Contents multi-stream + o wrap de graphics state que o
+próprio pdf-lib insere ao desenhar numa página copiada.
+
+Como o documento inteiro já é bitmap (nada de vetor pra perder), a solução
+robusta foi abandonar completamente a composição em nível de PDF pra essas
+páginas: **renderizar a página original como imagem** (mesma técnica do
+OCR), **desenhar a sobreposição direto no canvas** (`@napi-rs/canvas`,
+ordem de pintura sempre inequívoca — o que é desenhado por último sempre
+fica por cima) e **embutir o resultado como uma única imagem de página**.
+Páginas 100% novas (abertura personalizada, páginas de detalhe) continuam
+usando a API vetorial normal do `pdf-lib` (sem original por baixo, sem
+ambiguidade).
+
+Dois bugs adicionais, ambos corrigidos:
+- `@napi-rs/canvas`/`unpdf` precisam estar em `serverExternalPackages` no
+  `next.config.ts` — sem isso, o Turbopack tenta empacotar o binário
+  nativo e quebra em runtime ("Cannot find native binding"). Só apareceu
+  agora porque é a primeira vez que esse pacote roda **dentro do servidor
+  Next** (antes só era usado em scripts standalone).
+- Reusar a mesma instância de `Uint8Array`/`Buffer` em múltiplas chamadas
+  de `renderPageAsImage` quebra com `DataCloneError` (o pdf.js manda o
+  buffer pro worker via structured clone, que "esvazia"/destrói o buffer
+  original) — mesmo problema já documentado na ingestão do Guia Oficial
+  (seção 9). Corrigido criando uma cópia nova a cada chamada.
+
+### 22.4 Arquitetura final
+
+`src/modules/magazine/official-edition-mapping.ts` — mapeamento manual
+único (`página → [{ sku, priceBox }]`, fração 0-1 da página, indefinição de
+escala). `src/modules/magazine/official-pdf-assembler.ts`
+(`assembleOfficialMagazinePdf`) monta, nesta ordem: página de abertura
+personalizada nova (antes da capa, já que a capa oficial não tem área
+reservada pra sobrepor sem alterar a identidade visual) → capa oficial
+intacta (cópia direta) → índice oficial intacto → pra cada página de
+conteúdo (3 a 54): se tem produto mapeado, sobrepõe preço(s) + insere
+página(s) de detalhe logo depois; sem nada mapeado, cópia direta (evita
+reamostrar como imagem à toa, preserva qualidade); logo após a página de
+Fragrâncias (absoluta 47), as duas imagens reais das tabelas olfativas →
+contracapa oficial com overlay só na caixa branca já reservada na própria
+arte (foto circular, nome, cargo, cidade, WhatsApp, Instagram, mensagem
+personalizada, QR Code). `generator.ts` ganhou `buildEnrichmentBySku` —
+busca só os SKUs específicos de uma página (não o catálogo inteiro),
+reaproveitando 100% do enriquecimento já existente (Guia, `PerfumeProfile`).
+
+### 22.5 Status do mapeamento (grande, feito em etapas)
+
+Mecanismo completo validado de ponta a ponta (PDF de teste real gerado e
+inspecionado visualmente: capa nova, preço substituído sem fantasma/
+desalinhamento, contracapa com overlay limpo). Mapeada até agora: seção
+**Ozonizados** (página 3, 4 de 12 produtos com correspondência real).
+Faltam ~14 seções/51 páginas (Suplementos, Linha Capilar, Desempenho,
+Emagrecimento, Linha Casa, Linha Academia, Imunidade, Linha Dermo,
+Qualidade de Vida, Fragrâncias, Material de Apoio, Linha Nemawashi, Óleos
+Essenciais, Longevidade) — cada uma exige a mesma conferência visual
+produto-a-produto contra o catálogo real. Enquanto uma página não é
+mapeada, ela aparece intacta (cópia direta, sem preço desatualizado
+"escondido" nem erro) — comportamento correto, não um bug pendente.

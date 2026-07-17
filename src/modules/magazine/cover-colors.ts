@@ -1,6 +1,6 @@
 // Sem "server-only" de propósito — mesmo motivo de category-colors.ts:
 // usado tanto por MagazineView (Server Component) quanto por
-// pdf-template.tsx (que pode rodar fora do bundler do Next).
+// official-pdf-assembler.ts (que pode rodar fora do bundler do Next).
 
 export const COVER_COLOR_VALUES = ["VERDE", "AZUL", "ROXO", "DOURADO"] as const;
 export type CoverColor = (typeof COVER_COLOR_VALUES)[number];
