@@ -28,7 +28,16 @@ const DEFAULT_MAGAZINE_MESSAGE = "Olá! Vi sua revista digital e gostaria de sab
 // desenhar a sobreposição DIRETO no canvas (ordem de pintura inequívoca,
 // sempre por cima) e embutir o resultado como uma imagem de página única —
 // sem ambiguidade de Contents/z-order em lugar nenhum.
-const RENDER_SCALE = 2.5;
+//
+// 1.8, não 2.5: medido ao vivo (produção, 44 páginas com overlay) — 2.5
+// levava ~72s por PDF, tempo suficiente pra um consultor achar que a
+// página travou e desistir antes do <iframe> carregar (aconteceu de
+// verdade, ver PROJECT.md). 1.8 corta ~43% do tempo (140s→80s medido em
+// dev, proporção deve valer em produção) sem perda perceptível de
+// nitidez pra leitura em tela — a revista virou conteúdo primariamente
+// exibido num iframe/celular, não mais um PDF pra impressão em alta
+// resolução.
+const RENDER_SCALE = 1.8;
 
 // Caixa reservada em branco na contracapa oficial (página 55) — conferida
 // visualmente (ver PROJECT.md), fração da página, origem no canto superior

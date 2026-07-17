@@ -46,18 +46,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // abrir dentro do iframe do próprio navegador.
   const forceDownload = new URL(request.url).searchParams.get("download") === "1";
 
-  // DEBUG TEMPORÁRIO (remover depois de confirmado em produção).
-  console.log("[MAGAZINE-V4-DEBUG] /api/revista/[id]/pdf iniciando geração, issue=", id, "user=", user.id);
+  // Log de duração/tamanho — geração é sempre lenta o bastante (dezenas de
+  // segundos, ver RENDER_SCALE em official-pdf-assembler.ts) pra valer a
+  // pena monitorar regressão sem precisar reproduzir manualmente.
   const startedAt = Date.now();
 
   try {
     const buffer = await assembleOfficialMagazinePdf({ consultant });
-    console.log(
-      "[MAGAZINE-V4-DEBUG] /api/revista/[id]/pdf gerado com sucesso em",
-      Date.now() - startedAt,
-      "ms, bytes=",
-      buffer.length
-    );
+    console.log(`[revista-pdf] gerado em ${Date.now() - startedAt}ms, ${buffer.length} bytes, issue=${id}`);
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
@@ -65,12 +61,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       },
     });
   } catch (error) {
-    console.error(
-      "[MAGAZINE-V4-DEBUG] /api/revista/[id]/pdf falhou após",
-      Date.now() - startedAt,
-      "ms:",
-      error
-    );
+    console.error(`[revista-pdf] falhou após ${Date.now() - startedAt}ms, issue=${id}:`, error);
     return NextResponse.json({ error: "Falha ao gerar o PDF." }, { status: 500 });
   }
 }

@@ -26,16 +26,8 @@ export default async function RevistaConsultorPage() {
     );
   }
 
-  // DEBUG TEMPORÁRIO (remover depois de confirmado em produção) — prova,
-  // via log de servidor E marcador visual, que É este arquivo que está
-  // respondendo /consultor/revista.
-  console.log("[MAGAZINE-V4-DEBUG] app/consultor/revista/page.tsx renderizando, issue.id=", issue.id);
-
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4 pb-10">
-      <div className="rounded-md border-2 border-dashed border-red-500 bg-red-50 p-3 text-sm font-semibold text-red-700">
-        DEBUG MAGAZINE V4 — app/consultor/revista/page.tsx — issue {issue.id} — {new Date().toISOString()}
-      </div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Revista digital</h1>
         <div className="flex items-center gap-2">
